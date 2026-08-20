@@ -1,0 +1,9 @@
+{
+  "name": "studio-migrate-to-jira-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Markdown -> Atlassian Document Format (ADF) conversion for the _studio-migrate-to-jira skill. Jira Cloud's issue description field only accepts plain text or ADF JSON — raw markdown is stored literally with no rendering, so GitLab descriptions must be converted before being passed to `acli --description-file`.",
+  "dependencies": {
+    "markdown-to-adf": "^0.2.20"
+  }
+}
