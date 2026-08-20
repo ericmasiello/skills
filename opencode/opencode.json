@@ -26,6 +26,7 @@
     },
     "io.vista/gitlab-mcp": {
       "type": "remote",
+      "enabled": true,
       "url": "https://gitlab.com/api/v4/mcp"
     },
     "io.vista/miro-mcp": {
