@@ -61,7 +61,7 @@ Studio has many packages. Firing all at once exhausts memory. Follow this protoc
 task(
   subagent_type="studio-arch-explorer",
   run_in_background=true,
-  load_skills=["studio-architecture-review"],
+  load_skills=["studio-improve-codebase-architecture"],
   description="Architecture: {package-name}",
   prompt="[prompt from template above, with package path filled in]"
 )

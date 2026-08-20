@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "stitch": {
+      "type": "remote",
+      "url": "https://stitch.googleapis.com/mcp",
+      "enabled": false,
+      "headers": {
+        "X-Goog-Api-Key": "{env:STITCH_API_KEY}"
+      }
+    },
+    "io.vista/atlassian-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://mcp.atlassian.com/v1/mcp"
+    },
+    "io.vista/cortex-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://mcp.cortex.io/mcp"
+    },
+    "io.vista/figma-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://mcp.figma.com/mcp"
+    },
+    "io.vista/gitlab-mcp": {
+      "type": "remote",
+      "url": "https://gitlab.com/api/v4/mcp"
+    },
+    "io.vista/miro-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://mcp.miro.com/"
+    },
+    "io.vista/newrelic-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://mcp.newrelic.com/mcp/"
+    },
+    "io.vista/snowflake-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://snowflake-mcp.prod.aws-vista-data-platform.vpsvc.com/mcp"
+    },
+    "io.vista/ubik-docs-mcp": {
+      "type": "remote",
+      "enabled": false,
+      "url": "https://ubik-docs-mcp.ai-platform.vista.io/mcp"
+    },
+    "swancp": {
+      "type": "local",
+      "enabled": false,
+      "command": ["npx", "@vp/swancp-poc@latest"]
+    },
+    "skylight": {
+      "command": ["npx", "-y", "skylight-mcp"],
+      "enabled": false,
+      "type": "local"
+    }
+  },
+  "plugin": ["oh-my-openagent@latest", "@warp-dot-dev/opencode-warp"]
+}

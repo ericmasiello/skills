@@ -1,0 +1,63 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/dev/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "sisyphus": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-opus-5",
+      "variant": "high"
+    },
+    "oracle": {
+      "model": "cimpress-ai-gateway/@OpenAI/gpt-5.5",
+      "variant": "high"
+    },
+    "librarian": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-sonnet-5"
+    },
+    "explore": {
+      "model": "cimpress-ai-gateway/@OpenAI/gpt-5.4-mini"
+    },
+    "multimodal-looker": {
+      "model": "cimpress-ai-gateway/@vertex-ai-eu/gemini-3.5-flash"
+    },
+    "prometheus": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-opus-5",
+      "variant": "high"
+    },
+    "metis": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-opus-5",
+      "variant": "high"
+    },
+    "momus": {
+      "model": "cimpress-ai-gateway/@OpenAI/gpt-5.5",
+      "variant": "medium"
+    },
+    "atlas": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-sonnet-5"
+    }
+  },
+  "categories": {
+    "visual-engineering": {
+      "model": "cimpress-ai-gateway/@OpenAI/gpt-5.6-luna",
+      "variant": "high"
+    },
+    "ultrabrain": {
+      "model": "cimpress-ai-gateway/@OpenAI/gpt-5.6-luna",
+      "variant": "high"
+    },
+    "artistry": {
+      "model": "cimpress-ai-gateway/@OpenAI/gpt-5.6-luna",
+      "variant": "high"
+    },
+    "quick": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+    },
+    "unspecified-low": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-sonnet-5"
+    },
+    "unspecified-high": {
+      "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-sonnet-5"
+    },
+    "writing": {
+      "model": "cimpress-ai-gateway/@vertex-ai-eu/gemini-3.5-flash"
+    }
+  }
+}
