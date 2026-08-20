@@ -17,6 +17,11 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 link() {
   local src="$1" dest="$2"
 
+  if [[ ! -e "$src" ]]; then
+    echo "SKIP:    $src does not exist — nothing to link for $dest"
+    return
+  fi
+
   if [[ -L "$dest" ]]; then
     if [[ "$(readlink "$dest")" == "$src" ]]; then
       echo "ok:      $dest"
