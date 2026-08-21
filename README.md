@@ -29,7 +29,7 @@ Eric's personal agent skills collection and Opencode runtime configuration. The 
 ./setup.sh
 ```
 
-Symlinks `.agents` → `~/.agents` and each `opencode/*` target → `~/.config/opencode/*`. Safe to re-run; existing correct symlinks are left alone, anything else in the way is reported and skipped rather than clobbered. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
+Symlinks `~/.agents` → this repo's `.agents`, and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
 
 ## Finding a skill
 

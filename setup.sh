@@ -7,12 +7,33 @@
 # This script does NOT move a live checkout into place — see
 # docs/adr/0002-*.md for why.
 #
-# Safe to re-run. Existing correct symlinks are left alone; anything else
-# in the way is reported and skipped rather than clobbered.
+# Safe to re-run. Existing correct symlinks are left alone; a file or
+# directory already sitting at the destination is backed up (moved aside
+# with a timestamped suffix, never deleted) before the symlink is created —
+# see docs/adr/0005-*.md for why.
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Move an existing file/dir aside so link() can put a symlink in its place.
+# Never overwrites a prior backup: appends -1, -2, ... on collision.
+backup_dest() {
+  local dest="$1"
+  local timestamp backup suffix=""
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+
+  local n=0
+  while true; do
+    backup="${dest}.bak.${timestamp}${suffix}"
+    [[ -e "$backup" ]] || break
+    n=$((n + 1))
+    suffix="-$n"
+  done
+
+  mv "$dest" "$backup"
+  echo "backed up: $dest -> $backup"
+}
 
 link() {
   local src="$1" dest="$2"
@@ -32,8 +53,7 @@ link() {
   fi
 
   if [[ -e "$dest" ]]; then
-    echo "SKIP:    $dest already exists and is not a symlink — move it aside and re-run"
-    return
+    backup_dest "$dest"
   fi
 
   mkdir -p "$(dirname "$dest")"
@@ -48,6 +68,8 @@ link "$REPO_DIR/opencode/opencode.json"         "$HOME/.config/opencode/opencode
 link "$REPO_DIR/opencode/oh-my-openagent.json"  "$HOME/.config/opencode/oh-my-openagent.json"
 
 echo
-echo "Done. Any SKIP lines above need manual attention before re-running."
+echo "Done. Any 'backed up' line above moved a pre-existing file/dir aside —"
+echo "review it and delete once you've confirmed nothing was lost."
+echo "Any SKIP lines above need manual attention before re-running."
 echo "Note: opencode.json references \${STITCH_API_KEY} via {env:STITCH_API_KEY} —"
 echo "make sure that's exported in your shell profile (see docs/adr/0004-*.md)."
