@@ -53,8 +53,8 @@ d. **Create the symlinks in the target repo**, idempotently (skip any that alrea
 
 e. **Register them as local-only** in `.git/info/exclude` (not `.gitignore` — this must never touch a tracked file). Append these three lines if not already present:
    ```
-   /docs/agents/
-   /docs/adr/
+   /docs/agents
+   /docs/adr
    /CONTEXT.md
    ```
 
@@ -66,6 +66,6 @@ Read `.agents/skills/setup-matt-pocock-skills/SKILL.md` and follow its process (
 
 **Skip its step 4 instruction to write the `## Agent skills` block into `AGENTS.md`/`CLAUDE.md`, entirely, when step 1 above answered "yes."** That block only ever summarizes and points at `docs/agents/*.md` — no consuming skill reads it (only `setup-matt-pocock-skills` itself writes it); it exists purely for a human or fresh agent session skimming the repo root. Skipping it costs nothing functional.
 
-Every other write in its step 4 — `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, `docs/agents/triage-labels.md`, `CONTEXT.md`, `docs/adr/*.md` — proceeds completely unmodified. Because of the step 2d symlinks, those writes land in the sidecar transparently, and every downstream skill (`code-review`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `wayfinder`) keeps reading the same relative paths it always has, with zero changes to any of them.
+Every other write in its step 4 — `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, `docs/agents/triage-labels.md` — proceeds completely unmodified. Because of the step 2d symlinks, those writes land in the sidecar transparently. The `CONTEXT.md`/`docs/adr/` symlinks exist for the skills that write there later (`domain-modeling` and friends, not `setup-matt-pocock-skills` itself), and every downstream skill (`code-review`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `wayfinder`) keeps reading the same relative paths it always has, with zero changes to any of them.
 
 When step 1 answered "no," step 3 is just: run `setup-matt-pocock-skills` unmodified, in full.

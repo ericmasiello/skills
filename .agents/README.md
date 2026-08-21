@@ -4,6 +4,10 @@ Eric's personal collection of agent skills, installed at `~/.agents` (see `../do
 
 This file is a map back to any skill by what it's for, in the spirit of [mattpocock/skills](https://github.com/mattpocock/skills)'s own README.
 
+## Getting Started
+
+Configuring a new repo to use these skills? Run **[setup-ericmasiello-skills](./skills/setup-ericmasiello-skills/SKILL.md)** first — not `setup-matt-pocock-skills` directly. It asks one extra question (is this repo's root file or `docs/` restricted, e.g. a CODEOWNERS-gated monorepo?) and routes accordingly before deferring to the upstream setup flow. Every other skill below assumes that setup has already run.
+
 ## Planning & Delivery Flow
 
 The backbone chain from idea to shipped change, roughly in the order you'd reach for them.
