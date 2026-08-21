@@ -1,3 +1,8 @@
 .DS_Store
 node_modules
+
+# used by the .agents/skills/skylight-homework skill
 *.local.json
+
+# used for /address-pr-feedback skill
+.scratch
