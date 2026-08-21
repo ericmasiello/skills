@@ -1,0 +1,7 @@
+# setup.sh backs up conflicting files instead of skipping them
+
+`setup.sh` used to refuse to touch a destination that already existed and wasn't the correct symlink, printing `SKIP: ... move it aside and re-run`. On Eric's machine every target (`~/.agents`, `~/.config/opencode/agents`, `~/.config/opencode/commands`, `opencode.json`, `oh-my-openagent.json`) was still a real file/directory from before this repo existed (per ADR-0002/0003), so a fresh checkout produced five SKIP lines and needed five manual `mv`s before the script did anything useful.
+
+Decided to have `link()` move the pre-existing path aside itself — `dest` → `dest.bak.<UTC-timestamp>`, with a `-1`, `-2`, ... suffix on collision — then create the symlink in its place. Rejected clobbering (`rm -rf` + symlink) outright: the whole point of the old SKIP behavior was not losing data, and a mistaken re-run under the wrong `$HOME` should never delete anything. Rejected prompting for confirmation: the move is non-destructive and reversible (`mv` the backup back), so there's nothing for a human to gate that the backup naming doesn't already make safe.
+
+Consequence: a `SKIP: ... is a symlink to something else` line can still occur (an intentional foreign symlink is left alone, not backed up over) and needs the same manual attention as before. Backups accumulate under the parent directory on repeated runs against a broken destination; nothing in this script prunes them.
