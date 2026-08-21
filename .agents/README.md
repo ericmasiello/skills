@@ -4,6 +4,10 @@ Eric's personal collection of agent skills, installed at `~/.agents` (see `../do
 
 This file is a map back to any skill by what it's for, in the spirit of [mattpocock/skills](https://github.com/mattpocock/skills)'s own README.
 
+## Getting Started
+
+Configuring a new repo to use these skills? Run **[setup-ericmasiello-skills](./skills/setup-ericmasiello-skills/SKILL.md)** first — not `setup-matt-pocock-skills` directly. It asks one extra question (is this repo's root file or `docs/` restricted, e.g. a CODEOWNERS-gated monorepo?) and routes accordingly before deferring to the upstream setup flow. Every other skill below assumes that setup has already run.
+
 ## Planning & Delivery Flow
 
 The backbone chain from idea to shipped change, roughly in the order you'd reach for them.
@@ -22,6 +26,7 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[triage](./skills/triage/SKILL.md)**: Move issues and external PRs through a state machine of triage roles, categorize, verify, and write agent-ready briefs.
 - **[improve-codebase-architecture](./skills/improve-codebase-architecture/SKILL.md)**: Scan a codebase for deepening opportunities, present them as an HTML report, then grill through whichever one you pick.
 - **[setup-matt-pocock-skills](./skills/setup-matt-pocock-skills/SKILL.md)**: One-time config of issue tracker, triage labels, and domain doc layout for the other engineering skills.
+- **[setup-ericmasiello-skills](./skills/setup-ericmasiello-skills/SKILL.md)**: Run this instead of `setup-matt-pocock-skills` directly — same setup, plus a sidecar-and-symlink mode for repos where the root file or `docs/` is restricted. See `../docs/adr/0006-*.md`.
 - **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)**: Resolve an in-progress git merge/rebase conflict.
 
 ## Principles
