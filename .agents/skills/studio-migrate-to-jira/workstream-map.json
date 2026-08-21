@@ -1,3 +1,5 @@
 {
-  "workstream::extraction": "ERICRULEZ-1"
+  "workstream::extraction": "ERICRULEZ-1",
+  "workstream::sim-framework": "ERICRULEZ-29",
+  "workstream::architecture": "ERICRULEZ-41"
 }
