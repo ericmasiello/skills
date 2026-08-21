@@ -67,6 +67,21 @@ link "$REPO_DIR/opencode/commands"              "$HOME/.config/opencode/commands
 link "$REPO_DIR/opencode/opencode.json"         "$HOME/.config/opencode/opencode.json"
 link "$REPO_DIR/opencode/oh-my-openagent.json"  "$HOME/.config/opencode/oh-my-openagent.json"
 
+# Warn (don't fail) if a CLI some skill/config depends on isn't installed.
+# See README.md's Prerequisites table for what needs each one and how to install it.
+check_cli() {
+  local bin="$1"
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    echo "MISSING: $bin not found on PATH — see README.md's Prerequisites section for setup instructions."
+  fi
+}
+
+echo
+check_cli gh
+check_cli td
+check_cli acli
+check_cli playwright-cli
+
 echo
 echo "Done. Any 'backed up' line above moved a pre-existing file/dir aside —"
 echo "review it and delete once you've confirmed nothing was lost."
