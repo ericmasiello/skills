@@ -23,6 +23,17 @@ Eric's personal agent skills collection and Opencode runtime configuration. The 
 └── setup.sh             # idempotent installer — symlinks .agents/ and opencode/ into place
 ```
 
+## Prerequisites
+
+Some skills and `opencode/oh-my-openagent.json` settings shell out to external CLIs. Install these before relying on the corresponding skill:
+
+| CLI | Used by | Install |
+|-----|---------|---------|
+| [`gh`](https://cli.github.com) | Issue tracker (`docs/agents/issue-tracker.md`), `/triage`, `/to-spec`, `/to-tickets` | `brew install gh` |
+| [`td`](https://github.com/Doist/todoist-cli) (`@doist/todoist-cli`) | `todoist-cli` skill | `brew install todoist-cli` |
+| [`acli`](https://developer.atlassian.com/cloud/acli/) | `vista-atlassian` skill (Vistaprint work-context) | `brew install atlassian/acli/acli` |
+| [`playwright-cli`](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) | Browser automation — `browser_automation_engine.provider` in `opencode/oh-my-openagent.json` is set to `playwright-cli` | `npm install -g @playwright/cli@latest` |
+
 ## Setup
 
 ```sh

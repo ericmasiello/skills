@@ -34,6 +34,9 @@
       "model": "cimpress-ai-gateway/@Anthropic/eu.anthropic.claude-sonnet-5"
     }
   },
+  "browser_automation_engine": {
+    "provider": "playwright-cli"
+  },
   "categories": {
     "visual-engineering": {
       "model": "cimpress-ai-gateway/@OpenAI/gpt-5.6-luna",
