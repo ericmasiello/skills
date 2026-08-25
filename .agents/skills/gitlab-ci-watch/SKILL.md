@@ -47,3 +47,21 @@ Don't include MRs with no failed jobs in the failure list — keep the report to
 
 - No auto-fix, no comment posting, no retry — this skill only reports.
 - No polling loop inside a single run — it checks current state once and returns. Recurrence is the caller's job (e.g. an OpenChamber scheduled task invoking this skill on a cron).
+
+## Running as a persistent thread (routed mode)
+
+OpenChamber's scheduler always starts a brand-new session per run — there's no native setting to reuse one. Use this procedure when the scheduled task's prompt says to **"route the check into the persistent thread"** (instead of "run the gitlab-ci-watch skill" directly): it keeps every run's report in one scrollable conversation, starting a fresh one only when that thread has been archived.
+
+**State file:** `~/.cache/gitlab-ci-watch/session.json` — `{"sessionId": "ses_..."}`. Not part of this repo; runtime bookkeeping only.
+
+1. `mkdir -p ~/.cache/gitlab-ci-watch` (idempotent).
+2. If the state file exists, read `sessionId` from it.
+3. Call the `openchamber` tool, `session.list` with `all: true`, scoped to this directory. Search the returned array for that `sessionId`.
+
+   **Don't use `session.status` for this check** — it returns `idle` even for a nonexistent session ID, so it can't distinguish a real active session from a fake or deleted one. `session.list` is the only reliable source: a real, non-archived session has a `time` object with no `archived` key; an archived one has `time.archived` set.
+4. Branch:
+   - **Found, not archived** → `session.send` with that `sessionId` and prompt `"Run the gitlab-ci-watch skill and report results."` — the report lands in the existing thread.
+   - **Not found, or `time.archived` is set, or no state file yet** → `session.create` (same directory, same prompt), capture the returned `sessionId`, and overwrite the state file with it.
+5. Done — don't wait for the target session's reply; it runs and notifies independently.
+
+**Known tradeoff:** the outer cron-triggered session (which runs this routing procedure) still gets created every tick — that part of OpenChamber's model can't be avoided. It finishes almost immediately after step 4, so each run produces two "session finished" events: one near-instant from the router, one shortly after from the actual report. If that double-notification is worse than the clutter it replaces, this mode isn't worth it — fall back to direct mode.

@@ -53,11 +53,15 @@ Most skills are invoked directly — this repo's setup ends at `./setup.sh`. A f
 
 ### Setting up `gitlab-ci-watch`
 
+OpenChamber always starts a brand-new session per scheduled run — there's no setting to reuse one. The skill's **routed mode** works around this: each run checks `~/.cache/gitlab-ci-watch/session.json` for a still-active thread and sends into it, only starting a fresh one if that thread was archived — see [`gitlab-ci-watch/SKILL.md`](.agents/skills/gitlab-ci-watch/SKILL.md#running-as-a-persistent-thread-routed-mode) for the exact procedure. Tradeoff: you still get two "session finished" notifications per run — one from the outer routing session, one from the actual report shortly after.
+
 Paste this into an OpenChamber session (it has the `openchamber` tool and will call `schedule.create` for you):
 
-> Create an OpenChamber scheduled task named "GitLab CI Watch" with prompt "Run the gitlab-ci-watch skill and report results.", cron schedule `*/15 9-19 * * 1-5`, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `/Users/emasiello/Sites/ericmasiello-skills`.
+> Create an OpenChamber scheduled task named "GitLab CI Watch" with prompt "Route the gitlab-ci-watch check into the persistent thread.", cron schedule `*/15 9-19 * * 1-5`, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `/Users/emasiello/Sites/ericmasiello-skills`.
 
 Adjust the cron expression, timezone, or model to taste — the cadence above is every 15 minutes, weekdays 9am–7pm ET, which was this skill's own POC default. Confirm it landed with `schedule.list`, then trigger it once manually with `schedule.run` before trusting the cron.
+
+Prefer a fresh session every run instead? Swap the prompt for `"Run the gitlab-ci-watch skill and report results."` — that's direct mode, no persistent thread, no double notification.
 
 ## Finding a skill
 
