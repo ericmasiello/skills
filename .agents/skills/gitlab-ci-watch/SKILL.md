@@ -67,6 +67,15 @@ OpenChamber's scheduler always starts a brand-new session per run — there's no
    - **Not found, or `time.archived` is set, or no state file yet** → `session.create` (same directory, same prompt), capture the returned `sessionId`, and overwrite the state file with it.
 
    **Why the exact wording matters:** a persistent thread that's already run this skill once tends to replay its own remembered procedure on later turns instead of re-invoking the `skill` tool — verified directly: after editing this file's report format, a reused thread kept producing the *old* format until told explicitly to re-read the file, while a brand-new session (no prior memory) picked up the change automatically. Every routed-mode dispatch has to force the re-read, or skill edits silently stop reaching whatever thread is currently active.
-5. Done — don't wait for the target session's reply; it runs and notifies independently.
+5. **Clean up the previous tick's router session.** `openchamber` has no archive action, but the underlying OpenCode server does, over its own REST API — undocumented for agent use, verified working directly, but not an officially supported surface (could break on an OpenChamber update):
 
-**Known tradeoff:** the outer cron-triggered session (which runs this routing procedure) still gets created every tick — that part of OpenChamber's model can't be avoided. It finishes almost immediately after step 4, so each run produces two "session finished" events: one near-instant from the router, one shortly after from the actual report. If that double-notification is worse than the clutter it replaces, this mode isn't worth it — fall back to direct mode.
+   - Discover the port fresh every time, don't hardcode it — it isn't a fixed default: `ps aux | grep -o 'opencode serve.*--port [0-9]*' | grep -o '[0-9]*$' | head -1`
+   - Auth is HTTP Basic: username `opencode`, password `$OPENCODE_SERVER_PASSWORD` (already in the environment).
+   - Archive: `curl -X PATCH -u "opencode:$OPENCODE_SERVER_PASSWORD" -H "Content-Type: application/json" -d '{"time":{"archived": <current-epoch-ms>}}' "http://127.0.0.1:<port>/session/<id>"`.
+
+   Use `session.list(all=true)` (the normal tool, not curl) to find candidates: title matching this scheduled task's own auto-generated pattern (`GitLab CI Watch <date> <time>`), status `idle`, no `archived` timestamp yet. The persistent thread is safe from this filter — its title is `gitlab-ci-watch report`, a different pattern entirely.
+
+   This **won't catch the current run's own session** — it's still `busy` while this step runs, so it can't match its own `idle` filter. That's fine: each run archives the *previous* tick's now-finished router session, so at most one stays visible at a time instead of accumulating forever.
+6. Done — don't wait for the target session's reply; it runs and notifies independently.
+
+**Known tradeoff:** the outer cron-triggered session (which runs this routing procedure) still gets created every tick — that part of OpenChamber's model can't be avoided, and step 5 only bounds the visible pile-up to one, it doesn't eliminate the session-per-tick cost. Each run still produces two "session finished" events: one near-instant from the router, one shortly after from the actual report.
