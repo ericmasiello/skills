@@ -101,6 +101,7 @@ A pipeline for adding tests to legacy code, `test-plan-quality-workflow` orchest
 - **[tdd](./skills/tdd/SKILL.md)**: Test-driven development with a red-green-refactor loop.
 - **[prototype](./skills/prototype/SKILL.md)**: Build a throwaway prototype to answer a design question (state/logic or UI variations).
 - **[diagnosing-bugs](./skills/diagnosing-bugs/SKILL.md)**: Disciplined diagnosis loop for hard bugs and performance regressions.
+- **[node-version-mismatch](./skills/node-version-mismatch/SKILL.md)**: Fix a Node engine/version error (`EBADDEVENGINES`, etc.) by running `nvm install` against the repo's `.nvmrc`, instead of guessing or editing the requirement.
 - **[research](./skills/research/SKILL.md)**: Investigate a question against high-trust primary sources and capture findings as a Markdown file, run as a background agent.
 - **[code-comments](./skills/code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function.
 - **[wizard](./skills/wizard/SKILL.md)**: Generate an interactive bash wizard for steps only a human can perform (credentials, dashboards, provisioning).
