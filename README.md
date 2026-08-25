@@ -33,6 +33,7 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 | [`td`](https://github.com/Doist/todoist-cli) (`@doist/todoist-cli`) | `todoist-cli` skill | `brew install todoist-cli` |
 | [`acli`](https://developer.atlassian.com/cloud/acli/) | `vista-atlassian` skill (Vistaprint work-context) | `brew install atlassian/acli/acli` |
 | [`playwright-cli`](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) | Browser automation — `browser_automation_engine.provider` in `opencode/oh-my-openagent.json` is set to `playwright-cli` | `npm install -g @playwright/cli@latest` |
+| [`glab`](https://gitlab.com/gitlab-org/cli) | GitLab work — `gitlab-ci-watch`, `studio-*` skills, `address-pr-feedback` | `brew install glab` |
 
 ## Setup
 
@@ -41,6 +42,22 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 ```
 
 Symlinks `~/.agents` → this repo's `.agents`, and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
+
+## Scheduled tasks
+
+Most skills are invoked directly — this repo's setup ends at `./setup.sh`. A few are built to run on a recurring cadence instead, and for those, adding the `SKILL.md` isn't enough: they also need an [OpenChamber](https://docs.openchamber.dev) scheduled task pointed at them. Scheduled tasks are OpenChamber runtime state, not files in this repo, so each machine running OpenChamber needs its own set up once — `setup.sh` can't do this part for you.
+
+| Skill | Needs |
+|-------|-------|
+| [`gitlab-ci-watch`](.agents/skills/gitlab-ci-watch/SKILL.md) | A recurring OpenChamber scheduled task — see prompt below |
+
+### Setting up `gitlab-ci-watch`
+
+Paste this into an OpenChamber session (it has the `openchamber` tool and will call `schedule.create` for you):
+
+> Create an OpenChamber scheduled task named "GitLab CI Watch" with prompt "Run the gitlab-ci-watch skill and report results.", cron schedule `*/15 9-19 * * 1-5`, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `/Users/emasiello/Sites/ericmasiello-skills`.
+
+Adjust the cron expression, timezone, or model to taste — the cadence above is every 15 minutes, weekdays 9am–7pm ET, which was this skill's own POC default. Confirm it landed with `schedule.list`, then trigger it once manually with `schedule.run` before trusting the cron.
 
 ## Finding a skill
 
