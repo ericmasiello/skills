@@ -11,3 +11,7 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 ### Domain docs
 
 Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Branching
+
+Never write directly to `main` — this repo requires PRs. One branch per task, however many skills it touches, not one branch per skill. See `docs/agents/branching.md`.
