@@ -48,4 +48,4 @@ Start at [`.agents/README.md`](.agents/README.md) — a full catalog grouped by 
 
 ## Contributing to this repo
 
-Issues and specs live in GitHub Issues on this repo (`gh` CLI) — see `docs/agents/issue-tracker.md`. Triage uses a five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — see `docs/agents/triage-labels.md`. Domain decisions go in `CONTEXT.md` and `docs/adr/` — see `docs/agents/domain.md`.
+Issues and specs live in GitHub Issues on this repo (`gh` CLI) — see `docs/agents/issue-tracker.md`. Triage uses a five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — see `docs/agents/triage-labels.md`. Domain decisions go in `CONTEXT.md` and `docs/adr/` — see `docs/agents/domain.md`. Changes ship on a branch and go through a PR, never directly on `main` — one branch per task, not per skill — see `docs/agents/branching.md`.
