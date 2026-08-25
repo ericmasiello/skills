@@ -69,7 +69,7 @@ OpenChamber's scheduler always starts a brand-new session per run — there's no
    **Why the exact wording matters:** a persistent thread that's already run this skill once tends to replay its own remembered procedure on later turns instead of re-invoking the `skill` tool — verified directly: after editing this file's report format, a reused thread kept producing the *old* format until told explicitly to re-read the file, while a brand-new session (no prior memory) picked up the change automatically. Every routed-mode dispatch has to force the re-read, or skill edits silently stop reaching whatever thread is currently active.
 5. **Clean up the previous tick's router session.** `openchamber` has no archive action, but the underlying OpenCode server does, over its own REST API — undocumented for agent use, verified working directly, but not an officially supported surface (could break on an OpenChamber update):
 
-   - Discover the port fresh every time, don't hardcode it — it isn't a fixed default: `ps aux | grep -o 'opencode serve.*--port [0-9]*' | grep -o '[0-9]*$' | head -1`
+   - Discover the port fresh every time, don't hardcode it — it isn't a fixed default. Use a self-filtering grep pattern (`[o]pencode`) so the discovery command doesn't match its own `ps aux` row, and extract the `--port` value robustly: `ps aux | grep '[o]pencode serve' | grep -oE -- '--port[= ]+[0-9]+' | grep -oE '[0-9]+' | head -1`
    - Auth is HTTP Basic: username `opencode`, password `$OPENCODE_SERVER_PASSWORD` (already in the environment).
    - Archive: `curl -X PATCH -u "opencode:$OPENCODE_SERVER_PASSWORD" -H "Content-Type: application/json" -d '{"time":{"archived": <current-epoch-ms>}}' "http://127.0.0.1:<port>/session/<id>"`.
 
