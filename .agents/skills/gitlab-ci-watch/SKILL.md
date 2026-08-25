@@ -37,11 +37,11 @@ glab ci get --repo <group/project> --merge-request=<iid> --status=failed --with-
 2. **Check each MR's pipeline.** For every MR, run the `glab ci get --repo ... --merge-request=...` call above. A `null` (not `[]`) `jobs` field means no jobs matched the `--status=failed` filter — i.e. no failures. A populated `jobs` array means those specific jobs failed; each entry has a `name` and `web_url`. No need to also check `status` for running/pending pipelines — this skill only cares about failures.
 
    Some MRs have no pipeline at all (e.g. an old MR never re-run under current CI config) — the command exits non-zero with `No pipeline found for merge request !<iid>`. Treat this as "nothing to report" for that MR, not an error: log it and move on, don't abort the whole check over one MR.
-3. **Report — headline first.** The very first line of your response must state the overall result, since that's what a push notification preview shows:
+3. **Report — headline first, then every MR with a link.** The very first line of your response must state the overall result, since that's what a push notification preview shows:
    - No failures anywhere: `✅ All N open MRs green`
-   - One or more failures: `❌ N MR(s) have failing pipelines`, then one line per failing MR: title, project path, failed job name(s), and `web_url`.
+   - One or more failures: `❌ N MR(s) have failing pipelines`
 
-Don't include MRs with no failed jobs in the failure list — keep the report to signal, not a full status dump.
+   Then list **every** MR checked in step 1 — passing and failing alike, not just failures — one line each: status icon (✅/❌), title, project path (`references.full`), and `web_url`. For a failing MR, also name the failed job(s) from step 2. A link on every line means you can jump straight to any MR from the report, not just the ones that are red.
 
 ## Not in scope
 
@@ -59,9 +59,14 @@ OpenChamber's scheduler always starts a brand-new session per run — there's no
 3. Call the `openchamber` tool, `session.list` with `all: true`, scoped to this directory. Search the returned array for that `sessionId`.
 
    **Don't use `session.status` for this check** — it returns `idle` even for a nonexistent session ID, so it can't distinguish a real active session from a fake or deleted one. `session.list` is the only reliable source: a real, non-archived session has a `time` object with no `archived` key; an archived one has `time.archived` set.
-4. Branch:
-   - **Found, not archived** → `session.send` with that `sessionId` and prompt `"Run the gitlab-ci-watch skill and report results."` — the report lands in the existing thread.
+4. Branch, using this exact prompt in both cases — **not** `"Run the gitlab-ci-watch skill and report results."`:
+
+   > Re-read `.agents/skills/gitlab-ci-watch/SKILL.md` fresh from disk right now — don't rely on how you ran it earlier in this conversation, the file may have changed since. Then follow it exactly and report.
+
+   - **Found, not archived** → `session.send` that prompt to the stored `sessionId` — the report lands in the existing thread.
    - **Not found, or `time.archived` is set, or no state file yet** → `session.create` (same directory, same prompt), capture the returned `sessionId`, and overwrite the state file with it.
+
+   **Why the exact wording matters:** a persistent thread that's already run this skill once tends to replay its own remembered procedure on later turns instead of re-invoking the `skill` tool — verified directly: after editing this file's report format, a reused thread kept producing the *old* format until told explicitly to re-read the file, while a brand-new session (no prior memory) picked up the change automatically. Every routed-mode dispatch has to force the re-read, or skill edits silently stop reaching whatever thread is currently active.
 5. Done — don't wait for the target session's reply; it runs and notifies independently.
 
 **Known tradeoff:** the outer cron-triggered session (which runs this routing procedure) still gets created every tick — that part of OpenChamber's model can't be avoided. It finishes almost immediately after step 4, so each run produces two "session finished" events: one near-instant from the router, one shortly after from the actual report. If that double-notification is worse than the clutter it replaces, this mode isn't worth it — fall back to direct mode.
