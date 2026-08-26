@@ -8,7 +8,7 @@ Sidecar storage for `setup-ericmasiello-skills`. When that skill runs against a 
 _config/
 └── projects/
     └── <key>/                # normalized git remote, or a path slug when there's none
-        ├── project.json       # {"key", "remote", "worktree", "restricted", "createdAt", "updatedAt"}
+        ├── project.json       # {"key", "remote", "lastInvokedFrom", "restricted", "createdAt", "updatedAt"}
         ├── agents/
         │   ├── issue-tracker.md
         │   ├── domain.md
