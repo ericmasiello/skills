@@ -126,6 +126,7 @@ A pipeline for adding tests to legacy code, `test-plan-quality-workflow` orchest
 - **[pstack-typescript-best-practices](./skills/pstack-typescript-best-practices/SKILL.md)**: TypeScript best practices, used when reading or editing any `.ts`/`.tsx` file.
 - **[atlassian-mcp](./skills/atlassian-mcp/SKILL.md)**: Generic Atlassian (Jira/Confluence) integration via MCP.
 - **[gitlab-ci-watch](./skills/gitlab-ci-watch/SKILL.md)**: Check CI pipeline status across every open GitLab merge request you authored, on any project on your host, and report failures — read-only, built for recurring/scheduled checks. Needs an OpenChamber scheduled task to actually recur — see the root [`README.md`](../README.md#scheduled-tasks) setup prompt.
+- **[ci-fix-dispatch](./skills/ci-fix-dispatch/SKILL.md)**: Turn a CI-failure report (e.g. from `gitlab-ci-watch`) into a live OpenChamber session rooted in the failing MR/PR's own repo and branch — no `/handoff` doc, no manual copy/paste. Works for both GitLab and GitHub.
 
 ## Work-context (Vistaprint / Studio)
 

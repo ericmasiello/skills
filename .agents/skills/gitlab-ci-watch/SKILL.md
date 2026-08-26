@@ -45,7 +45,7 @@ glab ci get --repo <group/project> --merge-request=<iid> --status=failed --with-
 
 ## Not in scope
 
-- No auto-fix, no comment posting, no retry — this skill only reports.
+- No auto-fix, no comment posting, no retry — this skill only reports. To turn a failure this skill just reported into a live fix session in the failing MR's own repo/branch, see `ci-fix-dispatch`.
 - No polling loop inside a single run — it checks current state once and returns. Recurrence is the caller's job (e.g. an OpenChamber scheduled task invoking this skill on a cron).
 
 ## Running as a persistent thread (routed mode)
