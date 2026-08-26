@@ -38,25 +38,21 @@ c. **Create the sidecar if it doesn't exist**, at `<resolved-.agents>/_config/pr
      {
        "key": "<key>",
        "remote": "<normalized remote, or null>",
-       "worktree": "<absolute path to the target repo>",
+       "lastInvokedFrom": "<absolute path this skill was run from>",
        "restricted": true,
        "createdAt": "<ISO 8601 now>",
        "updatedAt": "<ISO 8601 now>"
      }
      ```
-   If it already exists, just update `worktree` and `updatedAt`.
+   If it already exists, just update `lastInvokedFrom` and `updatedAt`. This field is a breadcrumb, not a config value anything reads — a repo can have several worktrees at once (main checkout plus any number of `.worktrees/*` or OpenChamber-managed ones), so it only ever records wherever this skill last happened to run, not "the" worktree.
 
-d. **Create the symlinks in the target repo**, idempotently (skip any that already point at the right place; if `docs/agents`, `docs/adr`, or `CONTEXT.md` already exist as *real* files or directories with content, stop and ask the user how to reconcile before overwriting anything):
-   - `docs/agents` → `<sidecar>/agents` (create `docs/` first as a real directory if it doesn't exist — only `docs/agents` itself is a symlink)
-   - `docs/adr` → `<sidecar>/adr`
-   - `CONTEXT.md` → `<sidecar>/CONTEXT.md`
+d. **Create the symlinks in the target repo, and register them as local-only.** Run `relink.sh` (in this skill's own directory) against the target checkout:
+   ```
+   ./relink.sh <target-checkout-path>
+   ```
+   It derives `<key>` the same way as step 2a, creates `docs/agents` → `<sidecar>/agents`, `docs/adr` → `<sidecar>/adr`, and the root context doc (`CONTEXT.md` or `CONTEXT-MAP.md`, whichever the sidecar has) → its sidecar counterpart, then appends the matching paths to `.git/info/exclude` (never `.gitignore` — this must never touch a tracked file) if not already present. It's idempotent: existing correct symlinks and exclude entries are left alone; if a destination already exists as a *real* file/directory with content, it stops and reports the conflict instead of overwriting.
 
-e. **Register them as local-only** in `.git/info/exclude` (not `.gitignore` — this must never touch a tracked file). Append these three lines if not already present:
-   ```
-   /docs/agents
-   /docs/adr
-   /CONTEXT.md
-   ```
+   **Every new worktree or clone of an already-set-up repo needs its own run of this script** — the symlinks are local, untracked filesystem state that doesn't propagate the way `.git/info/exclude` does (that lives in the shared common `.git` dir, so it only needs setting once per repo). Re-run `relink.sh <path>` against any new worktree before expecting `docs/agents`, `docs/adr`, or the root context doc to resolve there.
 
 f. Tell the user exactly what was created and where, and that none of it is tracked, committed, or visible to `git status`, teammates, or CODEOWNERS review.
 
