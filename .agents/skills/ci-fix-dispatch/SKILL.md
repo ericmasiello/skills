@@ -27,6 +27,8 @@ Gather before dispatching (from the failure report, or ask if missing):
 
 ## 1. Resolve the local repo
 
+`mkdir -p ~/.cache/ci-fix-dispatch` (idempotent — run this before the first read/write below).
+
 State file: `~/.cache/ci-fix-dispatch/repo-map.json` — `{ "<slug>": { "directory": "...", "projectId": "..." } }`.
 
 If the slug isn't in the map yet (first run, or a project registered since the map was last built), refresh it: call `openchamber projects.list`, and for each entry not already mapped, read its remote and derive the slug:
@@ -51,11 +53,18 @@ If an entry exists for this MR/PR, verify it's still live the same way `gitlab-c
 
 ## 3. Create the session
 
+Derive the two values `session.create` needs beyond what step 1 already resolved — no extra API call, both come from the same local checkout:
+
+```bash
+default_branch=$(git -C <resolved directory> symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+slug_safe="${slug//\//-}"
+```
+
 ```
 openchamber session.create({
   directory: <resolved directory>,
-  worktree: "ci-fix-<slug-safe>-<number>",
-  startRef: "origin/<repo's default branch>",
+  worktree: "ci-fix-${slug_safe}-<number>",
+  startRef: "origin/${default_branch}",
   prompt: <see template below>
 })
 ```
