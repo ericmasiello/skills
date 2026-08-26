@@ -43,6 +43,10 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 
 Symlinks `~/.agents` → this repo's `.agents`, and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
 
+## Restricted repos & worktrees
+
+`setup-ericmasiello-skills` can configure a repo whose root file or `docs/` is restricted (CODEOWNERS-gated, shared with coworkers who don't use these skills) by writing its usual output to a personal sidecar instead, linked in via local-only symlinks — see [`docs/adr/0006-*.md`](docs/adr/0006-setup-ericmasiello-skills-sidecar-for-restricted-repos.md). Those symlinks are untracked filesystem state, so **every new worktree or clone of an already-configured restricted repo needs one run of [`relink.sh`](.agents/skills/setup-ericmasiello-skills/relink.sh)** before its `docs/agents`, `docs/adr`, or root context doc will resolve there — no arguments needed if your working directory is already inside that worktree.
+
 ## Scheduled tasks
 
 Most skills are invoked directly — this repo's setup ends at `./setup.sh`. A few are built to run on a recurring cadence instead, and for those, adding the `SKILL.md` isn't enough: they also need an [OpenChamber](https://docs.openchamber.dev) scheduled task pointed at them. Scheduled tasks are OpenChamber runtime state, not files in this repo, so each machine running OpenChamber needs its own set up once — `setup.sh` can't do this part for you.
