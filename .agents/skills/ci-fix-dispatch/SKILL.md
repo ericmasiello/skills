@@ -56,7 +56,7 @@ If an entry exists for this MR/PR, verify it's still live the same way `gitlab-c
 Derive the two values `session.create` needs beyond what step 1 already resolved — no extra API call, both come from the same local checkout:
 
 ```bash
-default_branch=$(git -C <resolved directory> symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+default_branch=$(git -C "<resolved directory>" symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
 slug_safe="${slug//\//-}"
 ```
 
