@@ -65,6 +65,8 @@ Closes #<iid1>
 Closes #<iid2>
 ```
 
+Run the finished description through the `/unslop` skill before creating the MR.
+
 Create with:
 
 ```bash
@@ -94,7 +96,8 @@ If an MR already exists and new commits were just pushed, update the MR descript
 3. Rewrite the "How to test this MR" section following the ["How to test this MR" guidance](#how-to-test-this-mr-section) below
 4. Add or update the `## Architecture` section following the ["Architecture section" guidance](#architecture-section) below
 5. Ensure every closed issue is listed in the **Closes** section — if this branch now addresses additional issues beyond the original, add them
-6. Apply the update:
+6. Run the updated description through the `/unslop` skill
+7. Apply the update:
 
 ```bash
 BODY_FILE=$(mktemp) && cat > "$BODY_FILE" <<'__MR_BODY__'
