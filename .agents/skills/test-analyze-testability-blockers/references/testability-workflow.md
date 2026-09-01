@@ -34,7 +34,7 @@ flowchart TD
     S3 -->|Tests written| S4
 
     subgraph S4["STAGE 4: QUALITY GATE — Validate Test Quality"]
-        D0["test-validate-characterization-quality<br/>• Determinism, coverage ≥85%, mutation ≥85%<br/>• PASS / NEEDS_REVISION / FAIL"]
+        D0["test-validate-characterization-quality<br/>• Determinism and policy-defined evidence gates<br/>• See shared verdict mapping"]
         D1["test-evaluate-targeted-coverage<br/>• Narrow coverage execution"]
         D2["test-evaluate-focused-mutation<br/>• Narrow mutation, 85% gate"]
         D3["test-analyze-test-smells<br/>• Test code hygiene"]
@@ -81,10 +81,11 @@ flowchart TD
 
 - `test-plan-seam-refactoring`: 18-pattern seam planning
 - `test-analyze-fallback-strategies`: Alternative approaches when seams are too risky
+- `test-apply-seam-refactoring`: Applies one approved seam in a separate change
 
 **Exit Criteria**:
 
-- Seams applied and verified (build passes, existing tests still pass)
+- Approved seams applied and verified by `test-apply-seam-refactoring` (build passes, existing tests still pass)
 - Target code can now be instantiated and observed in tests
 - Changes are atomic and committed per seam
 
@@ -103,6 +104,8 @@ flowchart TD
 - `test-plan-characterization-tests`: Plan characterization approach
 - `test-generate-golden-master-tests`: Approval/snapshot testing for complex outputs
 - `test-generate-unit-characterization-tests`: Explicit assertions with property-based/parameterized tests
+- `test-generate-acceptance-tests`: Driving behavior through its entry point
+- `test-generate-integration-tests`: Driven adapters against real infrastructure
 - `test-generate-object-mother-fixtures`: (Support) Maintainable test data setup
 
 **Exit Criteria**:
@@ -131,22 +134,20 @@ flowchart TD
 
 **Exit Criteria**:
 
-- **PASS**:
+- **PASS** (maps to `COMPLETE`; see `../../test-quality-policy.md`):
   - Mutation score ≥ 85%
   - Surviving mutants triaged
   - Coverage targets met
   - No high-severity test smells
-- **NEEDS_REVISION**:
+- **FAIL** (maps to `BLOCKED`):
   - Mutation score < 85%, or
   - Untriaged survivors, or
   - High-severity test smells remain
-- **FAIL**:
-  - Fundamental gaps in coverage or mutation effectiveness
 
 **Handoff**:
 
 - PASS → Safe to refactor
-- NEEDS_REVISION → Return to Stage 3 to strengthen tests
+- FAIL → Return to Stage 3 to strengthen tests or route missing evidence to the caller
 
 ---
 
@@ -256,5 +257,5 @@ PASS → Safe to incrementally introduce lower-level seams
 
 ## Related Documentation
 
-- `REVIEW_REPORT.md`: Quality review findings and improvement recommendations
+- Review findings: quality observations and improvement recommendations recorded by the calling workflow or reviewer
 - Individual skill `SKILL.md` files: Detailed skill specifications

@@ -4,12 +4,19 @@ description: Add tests to partially tested code with targeted gap analysis. Use 
 metadata:
   category: 'Test Coverage'
   tags: ['coverage', 'test-addition', 'gap-analysis', 'targeted-testing']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Missing Test Coverage Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -45,13 +52,13 @@ Coverage is a **lagging indicator**, never the target. Use uncovered lines/branc
 
 Do NOT use this skill when:
 
-- Code has **zero** tests (0% coverage) → Use `test-generate-unit-characterization-tests` or `test-generate-golden-master-tests` instead
+- Code has **zero** tests (0% coverage) → Return to `test-plan-quality-workflow` Scenario B for outside-in routing
 - Code has excellent coverage (80%+) but low mutation score → Use `test-refactor-test-smells` to improve assertions
 - Adding tests to brand new code → Use normal TDD workflow
 
 ## Trigger Guards
 
-- If measured coverage is **0%**, stop and hand off to characterization generation skills.
+- If measured coverage is **0%**, stop and return to `test-plan-quality-workflow` Scenario B.
 - If measured coverage is **80%+** and mutation is weak, stop and hand off to `test-refactor-test-smells`.
 - Use this skill only when the target is **partially tested** and a gap-ranked add-tests pass is needed.
 
@@ -66,49 +73,13 @@ If prerequisites are missing, return `BLOCKED` and request them.
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## The Coverage Gap Analysis Process
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 1: MEASURE BASELINE                                    │
-│ • Run coverage on existing tests                            │
-│ • Identify current coverage % (line + branch)               │
-│ • Export detailed coverage report (HTML/JSON)               │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 2: ANALYZE GAPS                                        │
-│ • Identify uncovered lines/branches                         │
-│ • Group by risk/criticality                                 │
-│ • Check for behavior families (happy/edge/failure)          │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 3: PRIORITIZE GAPS                                     │
-│ • Critical business logic first                             │
-│ • Edge cases and error handling second                      │
-│ • Happy paths last (often already covered)                  │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 4: ADD TARGETED TESTS                                  │
-│ • Match existing test style/framework                       │
-│ • One gap at a time with coverage verification              │
-│ • Apply test shape preference (PBT > Param > Single)        │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 5: VALIDATE QUALITY                                    │
-│ • Re-run coverage, verify improvement                       │
-│ • Run mutation testing on new tests                         │
-│ • Check no new test smells introduced                       │
-└─────────────────────────────────────────────────────────────┘
-```
+Five steps, in order: measure baseline → analyze gaps → prioritize gaps → add
+targeted tests → validate quality. Each is detailed in its own section below.
 
 ## Step 1: Measure Baseline Coverage
 
@@ -123,10 +94,6 @@ Use `test-evaluate-targeted-coverage` to generate current coverage report.
 3. Uncovered line numbers
 4. Uncovered branches (if available)
 
-### Coverage Report Formats
-
-Most tools support HTML or JSON output for detailed analysis.
-
 Read `references/coverage-commands-by-platform.md` when you need concrete coverage commands for Python, TypeScript or JavaScript, C#, or Go.
 
 ### Interpret Coverage Numbers
@@ -135,7 +102,7 @@ Read `references/coverage-commands-by-platform.md` when you need concrete covera
 | -------------- | ---------------- | ------------------------------------------ |
 | 0-20%          | Critical gaps    | Major test addition needed                 |
 | 21-50%         | Significant gaps | Systematic test addition required          |
-| 51-79%         | Moderate gaps    | Targeted test addition (this skill)        |
+| 1-79%          | Partial coverage | Targeted behavior-gap analysis             |
 | 80-89%         | Minor gaps       | Selective test addition for critical paths |
 | 90%+           | Excellent        | Focus on mutation score, not more coverage |
 
@@ -143,58 +110,29 @@ Read `references/coverage-commands-by-platform.md` when you need concrete covera
 
 ### Gap Classification
 
-Classify each uncovered line/branch by type:
+Classify each uncovered line/branch into exactly one type and its fixed priority —
+this mapping is the house rule; the type names are self-explanatory, so judge each
+gap against them directly rather than a bullet-example checklist:
 
-1. **Critical Business Logic**
-   - Calculations (pricing, discounts, taxes)
-   - Validation rules (business rules, constraints)
-   - State transitions (order status, workflow states)
-   - Authorization decisions
-   - **Priority**: HIGH
+| Type                     | Priority        |
+| ------------------------ | ---------------- |
+| Critical Business Logic  | HIGH             |
+| Edge Cases               | HIGH             |
+| Error Handling           | MEDIUM-HIGH      |
+| Happy Path               | MEDIUM (often already covered) |
+| Defensive Code           | LOW (may be acceptable gaps)   |
 
-2. **Edge Cases**
-   - Boundary values (min/max, empty/null)
-   - Rare conditions (leap years, timezone handling)
-   - Corner cases (division by zero, overflow)
-   - **Priority**: HIGH
-
-3. **Error Handling**
-   - Exception handling (`catch` blocks)
-   - Error recovery logic
-   - Validation failures
-   - Timeout handling
-   - **Priority**: MEDIUM-HIGH
-
-4. **Happy Path**
-   - Normal successful execution
-   - Most common code paths
-   - **Priority**: MEDIUM (often already covered)
-
-5. **Defensive Code**
-   - "This should never happen" checks
-   - Framework-required overrides
-   - Logging/debugging code
-   - **Priority**: LOW (may be acceptable gaps)
-
-### Gap Analysis Example
-
-Convert uncovered lines into a short classification list, then rank them by business criticality and behavior family.
-
-Read `references/coverage-gap-patterns.md` for representative examples of this classification step.
+Convert uncovered lines into a short classification list, then rank them by
+business criticality and behavior family. Read `references/coverage-gap-patterns.md`
+for worked examples per type.
 
 ### Behavior Family Analysis
 
-Check if gaps span behavior families:
-
-| Behavior Family | Definition                   | Gap Example                             |
-| --------------- | ---------------------------- | --------------------------------------- |
-| Happy Path      | Normal successful execution  | User logs in with valid credentials     |
-| Edge Case       | Boundary/unusual valid input | Empty shopping cart, very long username |
-| Failure Mode    | Expected errors/exceptions   | Invalid password, network timeout       |
-
-**Coverage Matrix**:
-
-If one family is missing across multiple code areas, treat that as a systematic priority rather than a local gap.
+Check if gaps span the same happy path / edge case / failure mode families used
+throughout this skill set (see `test-generate-acceptance-tests` and
+`test-generate-unit-characterization-tests` for the same vocabulary). If one family
+is missing across multiple code areas, treat that as a systematic priority rather
+than a local gap.
 
 ## Step 3: Prioritize Test Addition
 
@@ -210,35 +148,10 @@ Prioritize by **outermost incomplete layer first** (Acceptance → Unit → Inte
 | Medium | Medium      | P2       | Add tests when time permits |
 | Low    | Any         | P3       | Defer or skip               |
 
-**Risk Factors**:
-
-- Complexity (cyclomatic complexity >10)
-- Change frequency (modified in last 3 months)
-- Bug history (bugs found in this area)
-- Business impact (payment, security, data loss)
-
-**Criticality Factors**:
-
-- Business logic vs infrastructure code
-- User-facing vs internal code
-- Security-sensitive vs non-sensitive
-- Data-modifying vs read-only
-
-### Prioritization Example
-
-Given the gap classification from Step 2:
-
-```
-P0 - Lines 20-21: Discount edge case (Business logic + Edge case)
-P0 - Lines 12-13: Negative total validation (Business logic + Error handling)
-P1 - Lines 50-51: Payment error handling (Critical flow + Error handling)
-```
-
-**Work Order**:
-
-1. Add test for discount edge case
-2. Add test for negative total validation
-3. Add test for payment error handling
+Weigh Risk using complexity, change frequency, bug history, and business impact
+(payment/security/data-loss weigh higher); weigh Criticality using business-logic
+vs infrastructure, user-facing vs internal, and security-/data-sensitivity. Apply
+the resulting P0-P3 label from the Priority Matrix above as the work order.
 
 ## Step 4: Add Targeted Tests
 
@@ -261,13 +174,13 @@ Read `references/matching-existing-test-style.md` for a worked example of style 
 
 For each prioritized gap:
 
-1. **Write failing test**
+1. **Write observed-behavior test**
    - Follow existing test pattern
-   - Name test clearly: `test_{gap_being_covered}`
-   - Use characterization approach: run code, observe behavior, assert it
+    - Name the test after the observable behavior it protects
+    - Run the code, record the observed behavior, then assert it
 
 2. **Verify test covers gap**
-   - Run test (should pass if behavior exists)
+    - Run the test against the observed behavior
    - Run coverage on this test only
    - Confirm the target line or branch is now covered
 
@@ -276,9 +189,8 @@ For each prioritized gap:
    - Verify percentage increased
    - Confirm specific line/branch now covered
 
-4. **Commit and move to next gap**
-   - One gap per commit (makes reviews easier)
-   - Commit message: "test: cover {gap description}"
+4. **Report and move to the next gap**
+    - Record the behavior, evidence, and remaining gap for the calling workflow
 
 ### Test Shape Preference
 
@@ -314,7 +226,7 @@ Validate new tests with `test-evaluate-focused-mutation` and focus on the code o
 
 **Success Criteria**:
 
-- Mutation score ≥85% on newly covered code
+- Mutation score meets the project gate, or the 85% default, on newly covered code
 - New tests kill realistic mutants
 - No Testing Theater patterns (Zero-Assertion, Mock-Dominated, etc.)
 
@@ -375,7 +287,7 @@ P3 (Acceptable Gap): {list}
 
 ## Next Owner Decision
 
-- Continue With: {this skill | test-refactor-test-smells | test-generate-unit-characterization-tests | test-generate-golden-master-tests}
+- Continue With: {this skill | test-refactor-test-smells | test-generate-acceptance-tests | test-generate-unit-characterization-tests | test-generate-golden-master-tests | test-generate-integration-tests}
 - Reason: {coverage + mutation + testability rationale}
 
 ## Tests Added
@@ -409,15 +321,22 @@ P3 (Acceptable Gap): {list}
 - Type: {defensive|logging|framework|etc}
 - Priority: {P2|P3}
 - Justification: {why acceptable}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one layer generator | test-evaluate-targeted-coverage | human | self}
 ```
 
 ## Success Criteria
 
-- Coverage improved by ≥10% or reached 80%+ threshold
+- Each selected behavior is protected at its required layer
 - All P0 and P1 gaps covered
 - New tests match existing test style
 - No test duplication
-- Mutation score ≥85% on new tests
+- Mutation score meets the project gate, or the 85% default, on new tests
 - No test smells introduced
 - Remaining gaps documented and justified
 

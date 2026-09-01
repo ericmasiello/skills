@@ -4,12 +4,19 @@ description: Review test code for anti-patterns and provide specific refactoring
 metadata:
   category: 'Test Quality'
   tags: ['test-smells', 'refactoring', 'test-quality', 'anti-patterns', 'code-review']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Test Smells Review Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Mission
 
@@ -43,10 +50,8 @@ If prerequisites are missing, request them before analysis.
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Test Smell Catalog (19)
 
@@ -55,14 +60,14 @@ If prerequisites are missing, request them before analysis.
 | 1   | Logic in Test              | HIGH     | `if/for/while/foreach` in test body                |
 | 2   | Mock Overuse               | HIGH     | more than 3 mocks/stubs in one test                |
 | 3   | Test Interdependence       | HIGH     | shared mutable/static test state, order dependency |
-| 4   | Fragile Test               | HIGH     | exact call choreography assertions on internals    |
-| 5   | Mystery Guest              | MEDIUM   | hidden file/env/global fixture dependencies        |
+| 4   | Fragile Test               | HIGH     | exact call choreography assertions on internals, or an identity/reference assertion (`toBe`) that only holds because of the current implementation (e.g. an in-memory store returning the same object) rather than the behavioral contract |
+| 5   | Mystery Guest              | MEDIUM   | hidden file/env/global fixture dependencies, or any value the test uses without it being visible in the test's own body — including a module-level constant declared once and reused implicitly across many tests |
 | 6   | Eager Test                 | MEDIUM   | many unrelated behaviors in one test               |
 | 7   | Assertion Roulette         | MEDIUM   | many assertions with weak naming/context           |
 | 8   | Obscure Test               | LOW      | vague names (`test_it_works`, `should_work`)       |
 | 9   | Test Code Duplication      | MEDIUM   | repeated setup/assertion logic                     |
 | 10  | Conditional Test Logic     | MEDIUM   | branch logic wrapping assertions                   |
-| 11  | Hard-Coded Test Data       | LOW      | excessive magic values in tests                    |
+| 11  | Hard-Coded Test Data       | LOW      | unnamed literal strings/numbers passed as call arguments, with no constant, builder, or explanation of what the value represents |
 | 12  | Testing Private Methods    | HIGH     | reflection/access hacks for internals              |
 | 13  | Slow Unit Test             | MEDIUM   | waits, I/O, sleeps in a unit boundary              |
 | 14  | Mocking Final/Concrete     | HIGH     | mocking concrete implementation instead of port    |
@@ -72,19 +77,71 @@ If prerequisites are missing, request them before analysis.
 | 18  | Port-Boundary Violations   | CRITICAL | mocking domain/application layers instead of ports |
 | 19  | Testing Theater (10 types) | BLOCKER  | tests create false confidence without real checks  |
 
-## Severity Matrix
+## Co-Occurring Smell Disambiguation
 
-| Severity     | Smells                                                                                                                                                        | Impact                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **BLOCKER**  | Testing Theater (all 10 sub-types)                                                                                                                            | Catastrophic false confidence - worse than no tests, team believes code is tested when not    |
-| **CRITICAL** | Implementation Coupling, Port-Boundary Violations                                                                                                             | Tests prevent safe refactoring, violate architecture boundaries, couple to internal structure |
-| **HIGH**     | Logic in Test, Mock Overuse, Test Interdependence, Fragile Test, Shared Mutable State, Testing Private Methods, Mocking Final/Concrete, Mocking Value Objects | False confidence, brittle suites, flakiness, design regressions hidden                        |
-| **MEDIUM**   | Mystery Guest, Eager Test, Assertion Roulette, Conditional Test Logic, Duplication, Slow Unit Test                                                            | Low readability, poor maintainability, flakiness risk                                         |
-| **LOW**      | Obscure Test, Hard-Coded Test Data                                                                                                                            | Naming/readability debt, weaker documentation value                                           |
+Some smells share a root cause and commonly appear at the same lines. Report both,
+as two separate rows in the Findings table, rather than collapsing one into the
+other:
+
+- **Logic in Test (#1) + Conditional Test Logic (#10)**: when a test uses a loop to
+  reimplement production's branching and compute an expected value, report **#1**
+  for the reimplementation itself (a loop/computation inside the test) and
+  separately report **#10** for the `if`/`else` branching that drives it. The same
+  lines evidence both; do not report only #1 when the branching is present.
+- **Port-Boundary Violations (#18) + Mocking Final/Concrete (#14) + Mock Overuse
+  (#2)**: when a test hand-builds a double for a concrete domain/application class
+  (no port/interface exists for it) and passes it where a real instance is
+  expected, report **#18** for crossing the domain/infrastructure boundary, **#14**
+  for doubling a concrete class instead of a port, and **#2** if that double stubs
+  more than one method for a single call. These are three angles on the same
+  evidence — report all that apply, not just the first one noticed.
+- **Fragile Test (#4) + Implementation Coupling (#16)**: an exact call-choreography
+  assertion (`toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, argument-matching on a
+  mock) is both. Report **#4** because the assertion breaks on any internal refactor,
+  and **#16** because it couples the test to *how* the call happens rather than
+  *what* the caller observes. Do not report only #4 for this evidence.
 
 ## Quick Detection Heuristics
 
 Use heuristics only as a fast triage layer, then confirm manually before reporting smells.
+
+### Characterization Oracle Exception
+
+Characterization tests lock in **observed** behavior, not specified behavior. That is
+their purpose: the business rule is unknown, which is why the code is being
+characterized. Requiring every expected value to trace to a business rule would
+therefore flag correct characterization work as `Hardcoded magic oracle` (#19).
+
+An expected value is traceable when it comes from **either**:
+
+- a business rule or acceptance criterion, **or**
+- a recorded execution observation — the exact command run plus the output it
+  produced, as `test-generate-unit-characterization-tests` requires before locking
+  any value.
+
+Apply it this way:
+
+- Expected value backed by a recorded observation → **not** a finding. Prefer the
+  observation over a guess even when it encodes a legacy defect; that is
+  characterization working correctly.
+- Expected value with **no** stated rule and **no** recorded observation → still a
+  finding. The absence of *any* provenance is the smell, not the absence of a
+  business rule specifically.
+- Unsure which applies → ask for the observation evidence before reporting. A
+  missing observation is `Missing Evidence`, not automatically Theater.
+
+This exception governs point 3 of the 4-point check only. Points 1, 2 and 4 apply to
+characterization tests unchanged: a characterization test must still fail when the
+code it covers is deleted or broken, and must still assert observable behavior.
+
+### Go Assertion Guard Exception
+
+In Go, an assertion commonly uses an `if got != want { t.Errorf(...) }` guard.
+Do not report that guard alone as Logic in Test or Conditional Test Logic. Report
+those smells only when the control flow computes expected values, transforms
+production results, selects test data, retries behavior, or otherwise changes
+the test's behavioral oracle. This exception does not apply to loops or
+conditionals that recreate production rules.
 
 Read `references/detection-heuristics.md` when you need:
 
@@ -97,78 +154,49 @@ Read `references/detection-heuristics.md` when you need:
 
 ### Implementation Coupling (Smell #16)
 
-**Pattern**: Tests depend on implementation details, preventing safe refactoring.
+Standard implementation-coupling smell (see catalog table above for pattern/severity).
+Includes identity/reference equality (`toBe`) that only holds because of the current
+implementation (e.g. an in-memory store handing back the same reference), not the
+behavioral contract — not just mocking domain objects or asserting on internals.
 
-**Examples**:
+**Detection**: check if mocks are used inside the hexagon (domain/application layers)
+— VIOLATION; confirm tests validate observable behavior, not implementation, and
+would survive an Extract Method refactor.
 
-- Mocking domain objects or application services (violates port-boundary policy)
-- Asserting on private methods/fields/internal state
-- Tests break on refactoring despite behavior remaining unchanged
-- Tests duplicate production logic to verify correctness
-
-**Detection**:
-
-- Check if mocks are used inside hexagon (domain/application layers) - VIOLATION
-- Verify tests call only public interfaces
-- Confirm tests validate observable behavior, not implementation
-- Check if Extract Method refactoring would break tests
-
-**Severity**: CRITICAL
-
-**Fix**: Replace implementation assertions with behavior assertions on public interfaces. Mock only infrastructure ports, never domain objects.
+**Fix**: assert on public behavior only. Mock only infrastructure ports, never
+domain objects.
 
 ### Shared Mutable State (Smell #17)
 
-**Pattern**: Tests share state causing flakiness, order dependencies, parallel execution failures.
+Standard test-isolation smell (see catalog table above for pattern/severity).
 
-**Examples**:
+**Detection**: run tests in random order and in parallel — failures indicate shared
+state; look for static fields, shared fixtures, or class-level state.
 
-- Database state not reset between tests
-- Static variables mutated across tests
-- File system state persists between tests
-- In-memory caches shared across test methods
-
-**Detection**:
-
-- Run tests in random order - do they still pass?
-- Run tests in parallel - do they fail?
-- Check for test setup/teardown creating isolated state
-- Look for static fields, shared fixtures, class-level state
-
-**Severity**: HIGH
-
-**Fix**: Ensure complete test isolation. Reset all state in teardown. Use test-scoped fixtures, not class-level. Avoid static mutable state.
+**Fix**: complete isolation, state reset in teardown, test-scoped (not class-level)
+fixtures.
 
 ### Port-Boundary Violations (Smell #18)
 
-**Pattern**: Test doubles policy violates port-boundary rules defined in hexagonal architecture.
+Standard port-boundary smell (see catalog table above for pattern/severity) — a test
+doubles domain entities/value objects, application services, or business logic
+instead of only infrastructure adapters.
 
-**Examples**:
+**Detection**: identify every mock/stub in the test; classify each as Domain,
+Application, or Infrastructure; flag any mock of a Domain or Application type.
 
-- Mocking domain entities, value objects, or aggregates
-- Mocking application services (use cases)
-- Stubbing business logic instead of infrastructure adapters
-- Test doubles inside the hexagon boundary
-
-**Detection**:
-
-- Identify all mocks/stubs in test
-- Classify each as: Domain, Application, or Infrastructure
-- Flag any mocks of Domain or Application layers
-
-**Severity**: HIGH to CRITICAL
-
-**Fix**: Mock only infrastructure ports (repositories, external services, adapters). Keep domain and application layers real. Use Object Mothers for domain objects.
+**Fix**: mock only infrastructure ports (repositories, external services,
+adapters); keep domain and application layers real; use Object Mothers for domain
+objects.
 
 ### Testing Theater Detection (Smell #19)
 
-**Pattern**: Tests create illusion of safety without verifying real behavior. This is the **single most dangerous test quality issue** - undetected Testing Theater causes catastrophic production failures because the team believes code is tested when it is not.
-
-Use this condensed review check in the main skill:
+The single most dangerous test smell — tests create false confidence, so the team
+believes code is tested when it is not. Use this 4-point check:
 
 1. Delete the covered production code. If the test still passes, classify it as Theater.
 2. Introduce a realistic logic bug. If the test misses it, classify it as Theater.
-3. Trace each expected value to a business rule or acceptance criterion.
+3. Trace each expected value to a business rule, an acceptance criterion, **or a recorded execution observation** (see the Characterization Oracle Exception below).
 4. Prefer observable behavior assertions over existence checks, type checks, or internal call choreography.
 
 Read `references/testing-theater-review-guide.md` for the full sub-pattern catalog, examples, and severity guidance.
@@ -201,20 +229,11 @@ For each detected test smell:
 
 ## Approval Test Focus
 
-When reviewing Golden Master or approval tests, treat these as non-negotiable:
-
-- input matrices must be explicit data, not hidden in loops with branching logic
-- Cartesian products are acceptable only when the resulting case set stays readable and behaviorally meaningful
-- received/approved artifacts must come from deterministic execution with visible normalization rules
-- the touched approval-test area should be free of high-severity smells before new artifacts are locked in
-
-Approval suites are especially vulnerable to these smells:
-
-- `Logic in Test`: loops and conditionals that compute expected coverage shape instead of declaring cases
-- `Mystery Guest`: fixture files, globals, or environment inputs that make approved output hard to trust
-- `Eager Test`: giant matrix tests that mix unrelated behavior families into one approval blob
-- `Obscure Test`: case names that do not identify which input combination failed
-- `Test Code Duplication`: repeated case construction that should be moved into builders, mothers, or case factories
+Golden Master/approval suites are especially vulnerable to Logic in Test (loops
+computing the case matrix instead of declaring it), Mystery Guest (fixture files
+making approved output hard to trust), Eager Test (one giant matrix mixing
+unrelated behaviors), Obscure Test, and Test Code Duplication. The touched area
+must be free of high-severity smells before new artifacts are locked in.
 
 ## Examples
 
@@ -234,6 +253,12 @@ Use the examples only after you have already classified the smell and chosen the
 - `test-generate-object-mother-fixtures` for fixture/helper extraction when removing duplication
 
 ## Output Format
+
+The Summary must contain one explicit row for every one of the 19 catalogued
+smell categories, including categories with count `0`. Never merge categories
+under a generic heading: for example, report Mock Overuse, Mocking
+Final/Concrete, Mocking Value Objects, and Port-Boundary Violations as separate
+rows when the same evidence supports each one.
 
 ```markdown
 # Test Smell Report
@@ -260,4 +285,11 @@ Use the examples only after you have already classified the smell and chosen the
 1. **High Priority** — {high severity actions}
 2. **Medium Priority** — {medium severity actions}
 3. **Low Priority** — {cleanup actions}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```

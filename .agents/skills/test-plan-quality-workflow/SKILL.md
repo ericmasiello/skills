@@ -4,12 +4,15 @@ description: Plans and sequences the complete 4-stage test quality workflow (Det
 metadata:
   category: 'Test Orchestration'
   tags: ['orchestration', 'test-quality', 'workflow', 'test-improvement']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Test Quality Workflow Planner
+
+Shared coverage, mutation, routing, refactoring, retry, and verdict policy is
+defined in `test-quality-policy.md`.
 
 ## Purpose
 
@@ -52,52 +55,21 @@ Resolve both via auto-discovery first — see "Step -1: Multi-Project Auto-Disco
 
 ## Required Decision Output
 
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`), preceded by two
+fields specific to this orchestration skill:
+
 - `Candidate Modules`: ranked list considered, with the one-line evidence used for each (state "single module — no discovery needed" when only one exists)
 - `Selected Target`: module/layer chosen and why it ranked first
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one immediate next skill
 
 ## The 4-Stage Workflow
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ASSESS CURRENT STATE                                        │
-│ • Existing tests? Quality? Coverage?                        │
-│ • Route to Scenario A (improve) or B (create)               │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STAGE 1: DETECT                                             │
-│ • Skill: test-analyze-test-smells                            │
-│ • Output: Test smell inventory (19 smell types)             │
-│ • Gate: Blocker/Critical smells identified or none found    │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STAGE 2: REFACTOR (if issues detected)                      │
-│ • Skill: test-refactor-test-smells                          │
-│ • Output: Refactored tests free of critical smells          │
-│ • Gate: All Blocker/Critical smells resolved                │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STAGE 3: ADD MISSING TESTS (OUTSIDE-IN)                     │
-│ • Order: Acceptance → Unit → Integration                    │
-│ • 3a test-generate-acceptance-tests (mock external world)   │
-│ • 3b test-generate-unit-characterization-tests (domain)     │
-│ • 3c test-generate-integration-tests (real infrastructure)  │
-│ • Gate: every behavior covered at its layer (coverage=evidence)│
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STAGE 4: VALIDATE                                           │
-│ • Skills: test-evaluate-focused-mutation, test-validate-characterization-quality │
-│ • Output: Mutation score, quality gate report               │
-│ • Gate: Mutation score ≥85%                                 │
-└─────────────────────────────────────────────────────────────┘
-```
+Assess current state first, then route: Scenario A (existing tests) runs Detect →
+Refactor → Add Missing Tests → Validate; Scenario B (no tests) runs Analyze
+Blockers → Plan Seams → Add Characterization Tests → Validate. Both scenarios'
+stages, skills, and gates are detailed in their own sections below — this overview
+intentionally does not repeat per-stage skill names, since Scenario A and B use
+different skills for Stages 1-2.
 
 ## Step -1: Multi-Project Auto-Discovery (do this before asking the user)
 
@@ -111,15 +83,23 @@ When the workspace has multiple projects/modules — a monorepo, a solution with
 
 Full algorithm and a worked example: `references/multi-project-scope-selection.md`.
 
+Once a target is selected, before dispatching to any Stage skill, read its existing
+tests (if any) and one neighboring module's tests for naming and fixture convention.
+Downstream skills should match local convention, not impose a new one, unless it
+conflicts with a rule in this workflow.
+
 ## Step 0: Assess Current State
 
-Before starting the workflow, assess the current test state:
+Before starting the workflow, assess the current test state at the selected
+driving behavior or entry point. Do not aggregate neighboring classes' tests or
+coverage into the target's state: a test-covered translator in the same folder
+does not make an untested `Rover.execute` behavior "partially covered."
 
 ### Assessment Questions
 
 1. **Do tests exist for the target code?**
-   - Yes → Scenario A (improve existing tests)
-   - No → Scenario B (create tests for legacy code)
+    - Yes, for this driving behavior → Scenario A (improve existing tests)
+    - No, for this driving behavior → Scenario B (create tests for legacy code)
 
 2. **If tests exist, what is their quality?**
    - Run `test-analyze-test-smells` to detect issues
@@ -127,7 +107,7 @@ Before starting the workflow, assess the current test state:
    - Check mutation score (if available): `test-evaluate-focused-mutation`
 
 3. **What is the coverage level?**
-   - 0% → Scenario B (legacy characterization)
+    - 0% at the selected behavior/entry point → Scenario B (legacy characterization)
    - 1-79% → Scenario A with heavy Stage 3 work
    - 80%+ with low mutation score → Scenario A focused on Stage 2
 
@@ -135,7 +115,7 @@ Before starting the workflow, assess the current test state:
 
 | Current State                             | Route      | Primary Focus                           |
 | ----------------------------------------- | ---------- | --------------------------------------- |
-| No tests                                  | Scenario B | Stage 1 analysis → Stage 2 seams        |
+| No tests or 0% at the selected behavior   | Scenario B | Stage 1 analysis → Stage 2 only when blocked |
 | Tests with blocker smells                 | Scenario A | Stage 2 (refactor first)                |
 | Tests with missing behavior coverage      | Scenario A | Stage 3 (add missing tests, outside-in) |
 | Tests with good coverage but low mutation | Scenario A | Stage 2 + 4 (improve assertions)        |
@@ -148,7 +128,7 @@ Stage 3 adds tests **outside-in by layer**, never by chasing a coverage percenta
 2. **Unit** (middle) — pin branch-heavy domain internals not already locked by the acceptance layer.
 3. **Integration** (innermost) — exercise each driven adapter against real infrastructure, no in-boundary mocks.
 
-Coverage and mutation are **evidence** that each layer's behaviors are exercised — they are lagging indicators, never the driver. Never add a test whose only justification is raising a number. Layer boundaries are defined in [docs/RULES.md](../../../docs/RULES.md). This outside-in backfill order (widest behavioral net first) is deliberate and differs from the per-story RED flow in RULES.md.
+Coverage and mutation are **evidence** that each layer's behaviors are exercised — they are lagging indicators, never the driver. Never add a test whose only justification is raising a number. Apply the target repository's architecture/testing policy, if present. This outside-in backfill order (widest behavioral net first) is deliberate and differs from per-story RED flow.
 
 **Before declaring the acceptance layer complete**, enumerate the full driving surface — every REST endpoint (verb + route) for an HTTP API, or every public use-case entry point otherwise — and check each one directly against test files. A coverage/quality-baseline doc's list of flagged gaps is not a substitute for this enumeration: such docs are often scoped to a single test project and can both miss real gaps and falsely flag behavior that is actually covered by tests in a different test project (e.g. HTTP-level tests in an Api.Tests project exercising an Application-layer workflow). Only a full endpoint/entry-point sweep, checked file-by-file, supports a "layer complete" conclusion.
 
@@ -172,7 +152,7 @@ Review the target tests, classify findings by severity, and decide whether refac
 
 **Exit Decision**:
 
-- If Blocker/Critical smells found → Stage 2 (Refactor)
+- If Blocker/Critical smells, or High smells preventing reliable behavior evidence, are found → Stage 2 (Refactor)
 - If only Medium/Low smells → Stage 3 (Add Missing Tests)
 - If no smells and behaviors are unprotected at any layer → Stage 3 (Add Missing Tests)
 - If no smells and all layers protected → Stage 4 (Validate)
@@ -181,12 +161,12 @@ Review the target tests, classify findings by severity, and decide whether refac
 
 **Skill**: `test-refactor-test-smells`
 
-Remove Blocker and Critical smells first, validating after each refactoring step so the suite stays stable.
+Remove Blocker, Critical, and HIGH smells first, validating after each refactoring step so the suite stays stable.
 
 **Gate Criteria**:
 
 - All Blocker smells resolved
-- All Critical smells resolved
+- All Critical and HIGH smells resolved
 - Tests still pass after refactoring
 - No new smells introduced
 
@@ -197,13 +177,15 @@ Remove Blocker and Critical smells first, validating after each refactoring step
 
 ### Stage 3: Add Missing Tests (Outside-In)
 
-Add tests **outside-in by layer** — Acceptance → Unit → Integration — driven by unprotected behavior, not by a coverage percentage. Complete each layer before moving inward.
+Apply the layer order and boundaries from "Outside-In Principle" above, driven by
+unprotected behavior, not a coverage percentage. Complete each layer before moving
+inward.
 
-**Sub-steps**:
+**Skill per layer**:
 
-- **3a Acceptance** — `test-generate-acceptance-tests`: exercise each use case through its entry point, mocking only the external world (repositories/driven ports, external services, infra ports), keeping the domain real.
-- **3b Unit** — `test-generate-unit-characterization-tests` (or `test-generate-golden-master-tests` for complex outputs): pin branch-heavy domain internals not already locked by the acceptance layer.
-- **3c Integration** — `test-generate-integration-tests`: exercise each driven adapter the acceptance layer mocked against real infrastructure, no in-boundary mocks. Use `test-generate-missing-coverage-tests` to close remaining per-layer behavior gaps.
+- **3a Acceptance** — `test-generate-acceptance-tests`
+- **3b Unit** — `test-generate-unit-characterization-tests` (or `test-generate-golden-master-tests` for complex outputs)
+- **3c Integration** — `test-generate-integration-tests`; use `test-generate-missing-coverage-tests` to close remaining per-layer behavior gaps
 
 **Gate Criteria** (behavior-at-layer, coverage as evidence only):
 
@@ -231,7 +213,7 @@ Run focused mutation testing and the final characterization gate, then triage su
 
 **Gate Criteria**:
 
-- Mutation score ≥85%
+- Mutation score meets the project gate, or the 85% default
 - All surviving mutants triaged
 - No Testing Theater patterns present
 - Coverage maintained or improved
@@ -246,49 +228,53 @@ Use when target code has no tests (0% coverage).
 
 **Skills**:
 
-- `test-analyze-testability-blockers` (taxonomy-based blocker detection)
-- `test-analyze-testability-blockers` (cross-component prioritization)
+- `test-analyze-testability-blockers` (taxonomy-based blocker detection and cross-component prioritization)
 
 Identify what prevents tests, then rank where to invest first.
+
+Consume the blocker analyzer's taxonomy findings verbatim. This workflow owns
+routing and sequencing, not a second blocker classification pass: do not add,
+rename, or escalate blocker smells beyond the `test-analyze-testability-blockers`
+report. If a new suspected blocker appears, hand it back to that skill for a
+classified report before using it in the workflow.
 
 **Gate Criteria**:
 
 - blocker evidence captured for top targets
 - prioritized target list produced
 
-### Stage 2: Plan Seam Work
+**Exit Decision**:
+
+- If blockers require a seam → Stage 2 (Plan And Apply Seam Work)
+- If no blocker prevents direct observation → Stage 3 (No seam required)
+
+### Stage 2: Plan And Apply Seam Work
 
 **Skills**:
 
 - `test-plan-seam-refactoring` (default path)
 - `test-analyze-fallback-strategies` (only when seam risk is high)
+- `test-apply-seam-refactoring` (applies the approved plan in a separate change)
 
-Create behavior-preserving seam plans for prioritized targets before writing characterization tests.
+Create and apply behavior-preserving seams for prioritized targets before writing characterization tests. The planner selects the seam. The seam application skill owns the production edit and proof.
 
 **Gate Criteria**:
 
 - seam plan exists for prioritized target(s)
 - chosen path (default seam vs fallback) is justified
+- applied seam change preserves behavior and is reviewed separately
 
 ### Stage 3: Add Characterization Tests (Outside-In)
 
-**Skills** (applied in outside-in order):
+Apply the same layer order and skill mapping as Scenario A Stage 3 above. Seams from
+Stage 2 must make each layer constructible before its tests are written; control
+non-determinism first and favor the strongest stable test shape per behavior family
+(`test-generate-golden-master-tests` for complex outputs at any layer).
 
-- `test-generate-acceptance-tests` (outermost — mock only the external world, real domain)
-- `test-generate-unit-characterization-tests` (middle — branch-heavy domain internals)
-- `test-generate-integration-tests` (innermost — driven adapters against real infrastructure)
-- `test-generate-golden-master-tests` (for complex outputs at any layer)
+Use `test-plan-characterization-tests` first when the target needs a behavior inventory
+or test-shape decision. Do not require it when the auditor already supplied that plan.
 
-Lock current behavior outside-in: start with acceptance tests around each use case, then unit characterization for residual domain logic, then integration tests for the adapters the acceptance layer mocked. Control non-determinism first and favor the strongest stable test shape per behavior family. Seams from Stage 2 must make each layer constructible before its tests are written.
-
-**Gate Criteria** (same as Scenario A Stage 3):
-
-- Every use-case behavior protected by acceptance tests (external world mocked)
-- Every branch-heavy domain class protected by unit tests
-- Every driven adapter protected by integration tests (real infrastructure)
-- All behavior families covered (happy/edge/failure)
-- Coverage/mutation confirm the above as evidence, not as the target
-- Determinism controls in place
+**Gate Criteria**: same as Scenario A Stage 3 above.
 
 **Exit Decision**: → Stage 4 (Validate)
 
@@ -296,43 +282,11 @@ Lock current behavior outside-in: start with acceptance tests around each use ca
 
 Same as Scenario A Stage 4.
 
-## Stage Gates and Success Criteria
-
-### Stage 1 Gate: Detection Complete
-
-- ✅ All test files reviewed for smells
-- ✅ Findings classified by severity
-- ✅ Blocker/Critical smells identified
-- ✅ Exit routing decision made
-
-### Stage 2 Gate: Refactoring Complete
-
-- ✅ All Blocker smells resolved
-- ✅ All Critical smells resolved
-- ✅ Tests pass after refactoring
-- ✅ No new smells introduced
-
-### Stage 3 Gate: Missing Tests Added (Outside-In)
-
-- ✅ Every use-case behavior has an acceptance test (external world mocked)
-- ✅ Every branch-heavy domain class has unit tests
-- ✅ Every driven adapter has integration tests (real infrastructure)
-- ✅ Happy path covered
-- ✅ Edge cases covered
-- ✅ Failure modes covered
-- ✅ Coverage/mutation confirm the above as evidence (not chased as a target)
-- ✅ No test smells in new tests
-
-### Stage 4 Gate: Validation Complete
-
-- ✅ Mutation score ≥85%
-- ✅ Surviving mutants triaged
-- ✅ No Testing Theater present
-- ✅ Quality gate passed
+Each stage's gate criteria are stated once, in its Scenario A or Scenario B section above. Do not restate them elsewhere — a gate has one home so a later edit only changes one place.
 
 ## Detailed Guidance
 
-Read `references/WORKFLOW.md` for the full workflow map and role boundaries across the test skills.
+Read `../test-skills-workflow-diagram.md` for the visual map of both scenarios, the shared Stage 4 gate, and the current skill roster.
 
 Read `references/workflow-troubleshooting.md` for common failure modes during Stage 1 through Stage 4.
 
@@ -349,7 +303,7 @@ Read `references/multi-project-scope-selection.md` **before** asking the user wh
 - Selected Target: {module/package} — {why it ranked first}
 - Current State: {no tests | tests with issues | partial coverage}
 - Scenario: {A - Improve Existing | B - Legacy Code}
-- Routing Decision: {Stage 1 | Stage 3}
+- Routing Decision: {Stage 1 | Stage 2 | Stage 3 | Stage 4}
 
 ## Stage 1: Detection (if applicable)
 
@@ -384,27 +338,23 @@ Read `references/multi-project-scope-selection.md` **before** asking the user wh
 ## Stage 4: Validation
 
 - Skills Used: test-evaluate-focused-mutation, test-validate-characterization-quality
-- Mutation Score: {score}%
-- Survivors: {killed}/{total}
+- Mutation Evidence: {tool + exact command + scope + score + source revision + report location + eligible-mutant denominator + exclusions + timeout status}
+- Survivors: {killed}/{eligible total}
 - Triaged: {test gap: N | equivalent: N | deferred: N}
 - Gate Status: {PASS | FAIL}
 
-## Workflow Result
+## Decision Contract
 
-- Status: {COMPLETE | NEEDS_REVISION}
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill | human | self}
+
+## Workflow Summary
+
 - Quality Level: {Blocker Issues | Low Quality | Good Quality | Excellent Quality}
 - Next Steps: {none | address survivors | improve coverage}
 ```
-
-## Success Criteria
-
-- Workflow executed in correct stage order
-- Target module/project selected via ranked evidence (Step -1), not a default clarifying question, whenever discovery tools were available
-- All stage gates passed
-- Final mutation score ≥85%
-- No Blocker or Critical test smells remain
-- Every behavior protected at its layer (acceptance/unit/integration), with coverage as confirming evidence
-- Surviving mutants triaged and explained
 
 ## Related Skills
 

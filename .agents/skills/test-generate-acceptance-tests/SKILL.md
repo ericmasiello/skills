@@ -4,12 +4,19 @@ description: Generate acceptance tests that exercise a complete use case while m
 metadata:
   category: 'Characterization Testing'
   tags: ['acceptance-testing', 'outside-in', 'use-case', 'behavior-lock', 'boundary-mocking']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Outside-In Acceptance Test Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -23,7 +30,7 @@ Shared quality gates for determinism, representative coverage, and mutation effe
 Targeted test and coverage execution belongs to `test-evaluate-targeted-coverage`.
 Focused mutation scope and tooling belong to `test-evaluate-focused-mutation`.
 
-## Boundary (from docs/RULES.md)
+## Boundary
 
 - **Boundary**: **use case → domain** (recommended, transport-agnostic) OR **controller → domain** (pragmatic, when the app is HTTP-only and you accept coupling to transport).
 - **Mock (the external world) ONLY**: repositories / driven ports, external services (APIs, queues, email), infrastructure ports (time, ID generation, file system).
@@ -32,7 +39,7 @@ Focused mutation scope and tooling belong to `test-evaluate-focused-mutation`.
 
 If a dependency is not part of the external world, do not mock it. If the external world cannot be mocked because the use case constructs its own infrastructure, that is a seam blocker — hand off to `test-analyze-testability-blockers` / `test-plan-seam-refactoring`.
 
-## Mock Discipline (from docs/RULES.md)
+## Mock Discipline
 
 - ✅ **Mock/stub** infrastructure boundaries only. Use **stubs** for time/ID (fixed values, no verification). Use **mocks** for repositories/services with side effects.
 - ✅ **Verify commands** (save, send, publish) that change state.
@@ -81,12 +88,13 @@ Before generating tests, require:
 
 If (1) is not yet identified and the workspace has multiple projects/modules, do not ask the user which one — resolve it first via `test-plan-quality-workflow`'s auto-discovery (its `references/multi-project-scope-selection.md`), then return here with a concrete target. If any other prerequisite is missing once a target is chosen, stop and request it, or hand off the seam blocker.
 
+Before writing new scenarios, check the target's existing acceptance tests (if any) or a neighboring use case's tests for naming and object-mother convention already in use.
+
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill (normally `test-generate-integration-tests`)
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`). `Next Owner` is normally
+`test-generate-unit-characterization-tests`.
 
 ## Core Principle
 
@@ -122,7 +130,7 @@ Provide one evidence line per row (test name + commanded side effect or returned
 
 ```markdown
 Technique: Acceptance (Outside-In)
-Layer: acceptance (outermost) — next: integration
+Layer: acceptance (outermost) — next: unit
 Boundary: {use-case→domain | controller→domain}
 Target Use Case: {name}
 External World Mocked: {repositories/ports/services + double type per item}
@@ -147,17 +155,15 @@ Behavior Coverage:
 | Failure mode | {Detected\|Considered-Not-Found\|N/A} | {ref}    |
 
 Coverage/Mutation Evidence: {via test-evaluate-targeted-coverage / test-evaluate-focused-mutation}
-Handoff: {test-generate-integration-tests for adapters X, Y}
+Handoff: {test-generate-unit-characterization-tests for residual domain behavior, or test-generate-integration-tests when no unit behavior remains}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```
-
-## Success Criteria
-
-- Each test enters through the use case and keeps the domain real.
-- Only the external world is mocked; commands verified, queries not.
-- Every test maps to a named use-case behavior, not a coverage line.
-- Behavior families are explicitly marked with evidence.
-- Adapters that were mocked are handed off to the integration layer.
-- A "layer complete" claim is backed by a full endpoint/entry-point enumeration checked against test files, not by spot-checking the items a prior report happened to flag.
 
 ## Related Skills
 

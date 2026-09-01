@@ -4,18 +4,28 @@ description: Create approval tests that capture and lock current behavior for co
 metadata:
   category: 'Characterization Testing'
   tags: ['golden-master', 'approval-testing', 'snapshot-testing', 'characterization', 'legacy-code']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Stage 3 Golden Master Characterization Specialist
 
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
+
 ## Purpose
 
 Generate characterization tests that capture full actual outputs as a baseline and detect regressions through approval/snapshot comparison.
 
-These Stage 3 characterization techniques apply to **all service types**. Service classification affects the target architecture after characterization tests exist, but not whether Golden Master testing is valid. This is a characterization mechanism, not a separate test taxonomy.
+Golden Master is a characterization *technique*, not a separate test type — it still
+counts as acceptance, unit, integration, or contract testing depending on scope. It
+applies across **all service types**; service classification affects the target
+architecture after characterization tests exist, not whether Golden Master is valid.
 
 When the target is a function or other finite input surface, prefer a data-driven Cartesian product of meaningful input dimensions to maximize behavioral coverage quickly. Use this only when the input domain is bounded enough to stay readable, deterministic, and maintainable.
 
@@ -23,15 +33,13 @@ Shared quality gates for determinism, coverage, and mutation effectiveness belon
 Focused mutation scope, tool selection, and platform config belong to `test-evaluate-focused-mutation`.
 Targeted test and coverage execution belong to `test-evaluate-targeted-coverage`.
 
-## What Golden Master Is
-
-Golden Master testing records the system's real current behavior for representative inputs, approves that behavior as a baseline artifact, and flags any future behavioral drift by diffing current output against approved output.
-
-This is especially useful for legacy logic with broad branching or complex structured/text outputs where hand-written assertions are brittle.
-
 ## When to Use
 
-Use Golden Master when behavior produces complex outputs or many interacting branches where writing exact assertions by hand is brittle.
+Use Golden Master when behavior produces complex outputs **or** a finite but
+branch-rich behavior matrix where writing and maintaining exact assertions by hand
+is brittle. Small scalar output does not disqualify Golden Master when many
+meaningful input combinations must be locked (for example, a legacy state-machine
+transition with several categories and thresholds).
 
 Use it only after seams are verified and after choosing the appropriate Stage 3 test level. In legacy work, tests are added outside-in following Acceptance -> Unit -> Integration.
 
@@ -44,24 +52,31 @@ Use it only after seams are verified and after choosing the appropriate Stage 3 
 
 Before generating approval tests, require:
 
-1. seams verified
+1. seams verified, **or** no seam required because the target is directly
+   constructible, deterministic, and observable in tests
 2. deterministic capture or normalization strategy defined
 3. bounded/maintainable input-space strategy selected
 
 If any prerequisite is missing, stop and request it explicitly.
 
+Before choosing an approval framework or normalization approach, check whether the
+target repo already has approval/snapshot tests elsewhere and reuse their convention.
+If that convention cannot be inspected, state it as Missing Evidence and propose a
+standard framework for the detected platform; do not block a characterization plan
+solely because a convention is unavailable.
+
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## When NOT to Use
 
 Do NOT use Golden Master when:
 
-- **Outputs are simple and predictable**: Use explicit assertions (`test-generate-unit-characterization-tests`) when outputs can be asserted clearly
+- **Outputs and behavior matrix are both small and predictable**: Use explicit
+  assertions (`test-generate-unit-characterization-tests`) when named rules and
+  their few examples communicate intent more clearly than an approval artifact.
 - **Behavior is still non-deterministic**: Control time/random/IDs/order first, or approval diffs will create false failures
 - **Seams are not yet applied**: Code must be testable before Golden Master can capture behavior
 - **Input space is unbounded**: Golden Master works for bounded, representative inputs, not infinite domains
@@ -70,7 +85,9 @@ Do NOT use Golden Master when:
 
 ## Stage 3 Position
 
-Golden Master is not a separate test type. It is a characterization technique that can support acceptance, unit, integration, or contract tests when broad observed behavior is better captured through approved output artifacts than through hand-written assertions.
+Golden Master supports acceptance, unit, integration, or contract tests when broad
+observed behavior is better captured through approved output artifacts than through
+hand-written assertions — see the note under "Purpose" above.
 
 ## Preconditions
 
@@ -98,7 +115,6 @@ Golden Master is not a separate test type. It is a characterization technique th
 - ✅ Run targeted tests and coverage through `test-evaluate-targeted-coverage` before summarizing coverage evidence.
 - ✅ Run focused mutation through `test-evaluate-focused-mutation` against the production code protected by the new Golden Master tests.
 - ❌ Do not guess expected output.
-- ❌ Do not classify this as a separate test type (still unit/acceptance/etc.).
 - ❌ Do not hide the input matrix behind loops or conditionals that turn the approval test into a mini-program.
 - ❌ Do not brute-force unbounded or huge domains just to inflate coverage numbers.
 
@@ -149,14 +165,14 @@ Verification: compare current output to approved baseline
 Shared Quality Gate: `test-validate-characterization-quality`
 Targeted Coverage Skill: `test-evaluate-targeted-coverage`
 Focused Mutation Skill: `test-evaluate-focused-mutation`
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```
-
-## Success Criteria
-
-- Baseline generated from actual behavior.
-- Re-runs consistently detect drift.
-- Nondeterminism does not create false failures.
-- Shared quality gate reports strong coverage and mutation evidence for characterized targets.
 
 ## Examples
 

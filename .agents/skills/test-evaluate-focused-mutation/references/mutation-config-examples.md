@@ -71,7 +71,7 @@ When the tests that exercise the mutated class live in a **different** test proj
 Before spending multiple attempts on flag combinations, check quickly whether the test project has a **direct** `ProjectReference` to the project under mutation. If it doesn't:
 
 - confirm the exact behavior with `dotnet-stryker --help` and the installed version (this limitation may differ by version; newer Stryker.NET releases may resolve transitive references),
-- if still blocked, don't keep guessing at `-tp` combinations — fall back to running the tests directly and manually verifying assertions against real observed behavior (still valid evidence, just not an automated mutation score), and
+- if still blocked, do not keep guessing at `-tp` combinations — record mutation evidence as Missing Evidence and route to a human with the setup limitation, and
 - record the finding (tool version + exact blocked combination) so the next run on this repo doesn't repeat the same failed attempts.
 
 ## Go With go-mutesting

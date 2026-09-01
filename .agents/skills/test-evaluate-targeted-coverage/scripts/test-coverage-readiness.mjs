@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, extname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const JS_TEST_CONFIG_FILES = [
@@ -12,7 +13,30 @@ const JS_COVERAGE_PACKAGES = ['@vitest/coverage-v8', '@vitest/coverage-istanbul'
 const JAVA_BUILD_FILES = ['pom.xml', 'build.gradle', 'build.gradle.kts'];
 
 function safeRead(filePath) {
-  return existsSync(filePath) ? readFileSync(filePath, 'utf8') : '';
+  try {
+    return existsSync(filePath) ? readFileSync(filePath, 'utf8') : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Parse JSON that may be absent or malformed, without aborting the audit. */
+function safeParseJson(raw, warnings, label) {
+  if (raw.trim() === '') return {};
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    warnings.push(`${label} is present but not valid JSON (${error.message}); declarations were not read.`);
+    return {};
+  }
+}
+
+/** Strip comments before matching a declaration; a commented-out mention is not one. */
+function withoutComments(text, style) {
+  if (style === 'xml') return text.replace(/<!--[\s\S]*?-->/g, ' ');
+  if (style === 'hash') return text.replace(/(^|\s)#[^\n]*/g, ' ');
+  if (style === 'slash') return text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|\s)\/\/[^\n]*/g, ' ');
+  return text;
 }
 
 function hasAnyFile(rootDir, candidates) {
@@ -25,19 +49,27 @@ function findFilesByExtension(rootDir, extension, maxDepth = 3, currentDepth = 0
   }
 
   const results = [];
-  for (const entry of readdirSync(rootDir)) {
-    const fullPath = join(rootDir, entry);
-    const stats = statSync(fullPath);
+  let entries;
+  try {
+    // withFileTypes avoids a per-entry statSync, which throws on a dangling
+    // symlink and would abort the whole readiness assessment.
+    entries = readdirSync(rootDir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
 
-    if (stats.isDirectory()) {
-      if (entry === 'node_modules' || entry === '.git' || entry === 'dist' || entry === 'build') {
+  for (const entry of entries) {
+    const fullPath = join(rootDir, entry.name);
+
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === 'build') {
         continue;
       }
       results.push(...findFilesByExtension(fullPath, extension, maxDepth, currentDepth + 1));
       continue;
     }
 
-    if (extname(entry) === extension) {
+    if (entry.isFile() && extname(entry.name) === extension) {
       results.push(fullPath);
     }
   }
@@ -52,37 +84,45 @@ function commandAvailable(command, args, cwd, options = {}) {
 
   const result = spawnSync(command, args, {
     cwd,
-    encoding: 'utf8',
     stdio: 'ignore',
+    timeout: options.probeTimeoutMs ?? 10_000,
+    killSignal: 'SIGKILL',
   });
 
-  return result.status === 0;
+  return !result.error && result.status === 0;
 }
 
-function detectPlatform(repoPath) {
-  if (existsSync(join(repoPath, 'package.json'))) {
-    return 'javascript';
-  }
-  if (existsSync(join(repoPath, 'pyproject.toml'))) {
-    return 'python';
-  }
-  if (hasAnyFile(repoPath, JAVA_BUILD_FILES)) {
-    return 'java';
-  }
-  if (findFilesByExtension(repoPath, '.csproj').length > 0) {
-    return 'csharp';
-  }
-  if (existsSync(join(repoPath, 'go.mod'))) {
-    return 'go';
-  }
-  if (existsSync(join(repoPath, 'Cargo.toml'))) {
-    return 'rust';
-  }
-  return 'unknown';
+function packageManager(repoPath) {
+  if (existsSync(join(repoPath, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(join(repoPath, 'yarn.lock'))) return 'yarn';
+  return 'npm';
 }
 
-function detectJavascript(repoPath) {
-  const packageJson = JSON.parse(safeRead(join(repoPath, 'package.json')) || '{}');
+/**
+ * Detect EVERY platform present so a polyglot repository is not silently
+ * classified as whichever manifest happened to be checked first.
+ */
+function detectPlatforms(repoPath) {
+  const platforms = [];
+  if (existsSync(join(repoPath, 'package.json'))) platforms.push('javascript');
+  if (
+    existsSync(join(repoPath, 'pyproject.toml')) ||
+    existsSync(join(repoPath, 'setup.cfg')) ||
+    existsSync(join(repoPath, 'setup.py')) ||
+    existsSync(join(repoPath, 'requirements.txt'))
+  ) {
+    platforms.push('python');
+  }
+  if (hasAnyFile(repoPath, JAVA_BUILD_FILES)) platforms.push('java');
+  if (findFilesByExtension(repoPath, '.csproj').length > 0) platforms.push('csharp');
+  if (existsSync(join(repoPath, 'go.mod'))) platforms.push('go');
+  if (existsSync(join(repoPath, 'Cargo.toml'))) platforms.push('rust');
+  if (existsSync(join(repoPath, 'CMakeLists.txt'))) platforms.push('c');
+  return platforms;
+}
+
+function detectJavascript(repoPath, options, warnings = []) {
+  const packageJson = safeParseJson(safeRead(join(repoPath, 'package.json')), warnings, 'package.json');
   const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
   const scripts = packageJson.scripts ?? {};
   const hasVitest = Boolean(deps.vitest);
@@ -91,7 +131,14 @@ function detectJavascript(repoPath) {
   if (hasJest && !hasVitest) {
     testRunner = 'Jest';
   }
-  const testInstalled = hasVitest || hasJest;
+  const manager = packageManager(repoPath);
+  const runner = hasVitest ? 'vitest' : hasJest ? 'jest' : null;
+  const runnerArgs = manager === 'npm'
+    ? ['exec', '--', runner, '--version']
+    : manager === 'pnpm'
+      ? ['exec', runner, '--version']
+      : [runner, '--version'];
+  const testInstalled = Boolean(runner) && commandAvailable(manager, runnerArgs, repoPath, options);
   const testConfigured =
     JS_TEST_CONFIG_FILES.some((fileName) => existsSync(join(repoPath, fileName))) ||
     Boolean(scripts.test);
@@ -101,25 +148,32 @@ function detectJavascript(repoPath) {
   } else if (hasJest && !deps['@vitest/coverage-v8']) {
     coverageTool = 'Jest/Istanbul';
   }
-  const coverageInstalled = JS_COVERAGE_PACKAGES.some((pkg) => Boolean(deps[pkg])) || hasJest;
+  // Jest bundles coverage, but "jest is present" is not evidence that coverage
+  // is wired up; require an explicit signal either way.
+  const coverageInstalled = hasJest
+    ? testInstalled
+    : testInstalled && JS_COVERAGE_PACKAGES.some((pkg) => Boolean(deps[pkg]));
   const configText = JS_TEST_CONFIG_FILES.map((fileName) =>
     safeRead(join(repoPath, fileName)),
   ).join('\n');
   const coverageConfigured =
-    /coverage\s*:/i.test(configText) || /--coverage/.test(Object.values(scripts).join(' '));
-  let installCommand = 'pnpm add -D vitest @vitest/coverage-v8';
+    /coverage\s*:/i.test(configText) ||
+    /collectCoverage|coverageReporters|coverageThreshold/i.test(configText) ||
+    /--coverage/.test(Object.values(scripts).join(' '));
+  let installCommand = `${manager} ${manager === 'npm' ? 'install' : 'add'} -D vitest @vitest/coverage-v8`;
   if (hasVitest) {
-    installCommand = 'pnpm add -D @vitest/coverage-v8';
+    installCommand = `${manager} ${manager === 'npm' ? 'install' : 'add'} -D @vitest/coverage-v8`;
   } else if (hasJest) {
     installCommand = 'Use Jest built-in coverage or add nyc if needed';
   }
-  let verifyCommand = 'pnpm exec vitest --version';
+  let verifyCommand = manager === 'npm' ? 'npm exec -- vitest --version' : `${manager} exec vitest --version`;
   if (hasJest && !hasVitest) {
-    verifyCommand = 'pnpm exec jest --version';
+    verifyCommand = manager === 'npm' ? 'npm exec -- jest --version' : `${manager} exec jest --version`;
   }
 
   return {
     platform: 'javascript',
+    packageManager: manager,
     testRunner,
     coverageTool,
     testInstalled,
@@ -138,15 +192,21 @@ function detectJavascript(repoPath) {
 }
 
 function detectPython(repoPath, options) {
-  const combined = [
-    safeRead(join(repoPath, 'pyproject.toml')),
-    safeRead(join(repoPath, 'setup.cfg')),
-    safeRead(join(repoPath, 'requirements.txt')),
-  ].join('\n');
-  const testInstalled =
-    /pytest/i.test(combined) || commandAvailable('pytest', ['--version'], repoPath, options);
+  const combined = withoutComments(
+    [
+      safeRead(join(repoPath, 'pyproject.toml')),
+      safeRead(join(repoPath, 'setup.cfg')),
+      safeRead(join(repoPath, 'requirements.txt')),
+    ].join('\n'),
+    'hash',
+  );
+  const testDeclared = /pytest/i.test(combined);
+  const testInstalled = testDeclared && commandAvailable('pytest', ['--version'], repoPath, options);
+  // pytest-cov is a separate plugin; a working pytest proves nothing about it.
+  const coverageDeclared = /pytest-cov/i.test(combined);
   const coverageInstalled =
-    /pytest-cov/i.test(combined) || commandAvailable('pytest', ['--help'], repoPath, options);
+    coverageDeclared &&
+    commandAvailable('python', ['-c', 'import pytest_cov'], repoPath, options);
   const coverageConfigured = /--cov|\[tool\.pytest|\[pytest\]/i.test(combined);
 
   return {
@@ -164,11 +224,11 @@ function detectPython(repoPath, options) {
 }
 
 function detectJava(repoPath, options) {
-  const pom = safeRead(join(repoPath, 'pom.xml'));
-  const gradle = [
-    safeRead(join(repoPath, 'build.gradle')),
-    safeRead(join(repoPath, 'build.gradle.kts')),
-  ].join('\n');
+  const pom = withoutComments(safeRead(join(repoPath, 'pom.xml')), 'xml');
+  const gradle = withoutComments(
+    [safeRead(join(repoPath, 'build.gradle')), safeRead(join(repoPath, 'build.gradle.kts'))].join('\n'),
+    'slash',
+  );
   const combined = `${pom}\n${gradle}`;
   const hasMaven = existsSync(join(repoPath, 'pom.xml'));
   const testInstalled = hasMaven
@@ -194,10 +254,11 @@ function detectJava(repoPath, options) {
 
 function detectCSharp(repoPath, options) {
   const csprojContent = findFilesByExtension(repoPath, '.csproj')
-    .map((filePath) => safeRead(filePath))
+    .map((filePath) => withoutComments(safeRead(filePath), 'xml'))
     .join('\n');
   const testInstalled = commandAvailable('dotnet', ['--version'], repoPath, options);
-  const coverageInstalled = /coverlet|XPlat Code Coverage/i.test(csprojContent);
+  const coverageDeclared = /coverlet|XPlat Code Coverage/i.test(csprojContent);
+  const coverageInstalled = coverageDeclared && testInstalled;
 
   return {
     platform: 'csharp',
@@ -208,14 +269,16 @@ function detectCSharp(repoPath, options) {
     coverageInstalled,
     coverageConfigured: coverageInstalled,
     installCommand: 'Add coverlet.collector or use dotnet test --collect:"XPlat Code Coverage"',
-    verifyCommand: 'dotnet test --version',
+    verifyCommand: 'dotnet --version',
     configShape: ['test project selection', 'coverage collector', 'output format'],
   };
 }
 
 function detectGo(repoPath, options) {
   const hasGoMod = existsSync(join(repoPath, 'go.mod'));
-  const testInstalled = hasGoMod || commandAvailable('go', ['version'], repoPath, options);
+  // go.mod presence was already required to reach this branch, so it proved
+  // nothing. Only the toolchain probe does.
+  const testInstalled = commandAvailable('go', ['version'], repoPath, options);
 
   return {
     platform: 'go',
@@ -232,10 +295,8 @@ function detectGo(repoPath, options) {
 }
 
 function detectRust(repoPath, options) {
-  const cargoToml = safeRead(join(repoPath, 'Cargo.toml'));
-  const testInstalled =
-    existsSync(join(repoPath, 'Cargo.toml')) ||
-    commandAvailable('cargo', ['--version'], repoPath, options);
+  const cargoToml = withoutComments(safeRead(join(repoPath, 'Cargo.toml')), 'hash');
+  const testInstalled = commandAvailable('cargo', ['--version'], repoPath, options);
   const coverageInstalled =
     /cargo-llvm-cov/i.test(cargoToml) ||
     commandAvailable('cargo', ['llvm-cov', '--version'], repoPath, options);
@@ -254,14 +315,61 @@ function detectRust(repoPath, options) {
   };
 }
 
+function detectC(repoPath, options) {
+  const cmake = withoutComments(safeRead(join(repoPath, 'CMakeLists.txt')), 'hash');
+  const testInstalled = commandAvailable('ctest', ['--version'], repoPath, options);
+  const coverageInstalled = commandAvailable('gcovr', ['--version'], repoPath, options);
+  return {
+    platform: 'c',
+    testRunner: 'CTest',
+    coverageTool: 'gcovr',
+    testInstalled,
+    testConfigured: /enable_testing|add_test/i.test(cmake),
+    coverageInstalled,
+    coverageConfigured: /--coverage|fprofile-arcs|ftest-coverage/i.test(cmake),
+    installCommand: 'Install gcovr and enable compiler coverage instrumentation in CMake',
+    verifyCommand: 'gcovr --version',
+    configShape: ['CTest registration', 'compiler coverage flags', 'gcovr XML or text report'],
+  };
+}
+
 export function assessTestCoverageReadiness(repoPath = '.', options = {}) {
   const resolvedRepoPath = resolve(repoPath);
-  const platform = detectPlatform(resolvedRepoPath);
+  const warnings = [];
+
+  if (!existsSync(resolvedRepoPath)) {
+    return {
+      repoPath: resolvedRepoPath,
+      platform: 'unknown',
+      platforms: [],
+      packageManager: null,
+      testRunner: null,
+      coverageTool: null,
+      readiness: 'target-not-found',
+      probed: false,
+      testInstalled: false,
+      coverageInstalled: false,
+      testConfigured: false,
+      coverageConfigured: false,
+      installCommand: null,
+      verifyCommand: null,
+      configShape: [],
+      warnings: [`The path "${resolvedRepoPath}" does not exist. This is a bad target, not a missing tool.`],
+    };
+  }
+
+  const platforms = detectPlatforms(resolvedRepoPath);
+  const platform = platforms[0] ?? 'unknown';
+  if (platforms.length > 1) {
+    warnings.push(
+      `Multiple platforms detected at this path (${platforms.join(', ')}); "${platform}" was assessed. Point the audit at a single sub-project, or pass the target explicitly.`,
+    );
+  }
 
   let detection;
   switch (platform) {
     case 'javascript':
-      detection = detectJavascript(resolvedRepoPath);
+      detection = detectJavascript(resolvedRepoPath, options, warnings);
       break;
     case 'python':
       detection = detectPython(resolvedRepoPath, options);
@@ -278,6 +386,9 @@ export function assessTestCoverageReadiness(repoPath = '.', options = {}) {
     case 'rust':
       detection = detectRust(resolvedRepoPath, options);
       break;
+    case 'c':
+      detection = detectC(resolvedRepoPath, options);
+      break;
     default:
       detection = {
         platform: 'unknown',
@@ -293,19 +404,25 @@ export function assessTestCoverageReadiness(repoPath = '.', options = {}) {
       };
   }
 
+  const probed = options.checkCommands !== false;
   const installed = detection.testInstalled && detection.coverageInstalled;
   const configured = detection.testConfigured && detection.coverageConfigured;
   let readiness = 'missing-tool';
   if (installed) {
     readiness = configured ? 'installed and configured' : 'installed-needs-config';
+  } else if (!probed && (detection.testConfigured || detection.coverageConfigured)) {
+    readiness = 'declared-unverified';
   }
 
   return {
     repoPath: resolvedRepoPath,
     platform: detection.platform,
+    platforms,
+    packageManager: detection.packageManager ?? null,
     testRunner: detection.testRunner,
     coverageTool: detection.coverageTool,
     readiness,
+    probed,
     testInstalled: detection.testInstalled,
     coverageInstalled: detection.coverageInstalled,
     testConfigured: detection.testConfigured,
@@ -313,15 +430,35 @@ export function assessTestCoverageReadiness(repoPath = '.', options = {}) {
     installCommand: detection.installCommand,
     verifyCommand: detection.verifyCommand,
     configShape: detection.configShape,
+    warnings,
   };
 }
 
+export const EXIT_CODES = {
+  OK: 0,
+  CRASH: 1,
+  TOOL_MISSING: 3,
+  TARGET_NOT_FOUND: 4,
+};
+
 function main() {
-  const repoPath = process.argv[2] ?? '.';
-  const result = assessTestCoverageReadiness(repoPath);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  try {
+    const repoPath = process.argv[2] ?? '.';
+    const result = assessTestCoverageReadiness(repoPath);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    if (result.readiness === 'target-not-found') {
+      process.exitCode = EXIT_CODES.TARGET_NOT_FOUND;
+      return;
+    }
+    if (result.readiness === 'missing-tool' || result.readiness === 'declared-unverified') {
+      process.exitCode = EXIT_CODES.TOOL_MISSING;
+    }
+  } catch (error) {
+    process.stderr.write(`${JSON.stringify({ error: 'UNEXPECTED_ERROR', message: error.message }, null, 2)}\n`);
+    process.exitCode = EXIT_CODES.CRASH;
+  }
 }
 
-if (basename(process.argv[1] ?? '') === 'test-coverage-readiness.mjs') {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main();
 }

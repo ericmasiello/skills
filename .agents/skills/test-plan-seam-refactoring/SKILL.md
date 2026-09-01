@@ -1,15 +1,22 @@
 ---
 name: test-plan-seam-refactoring
-description: Plan safe refactorings to make untestable legacy code testable. Use when you say 'make this testable', 'apply seams', 'introduce test doubles', 'refactor for testing', or code has hardcoded dependencies, global state, difficult constructors, or other barriers preventing test creation.
+description: Plan safe refactorings to make untestable legacy code testable. Use when you say 'make this testable', 'plan seams', 'introduce test doubles', 'refactor for testing', or code has hardcoded dependencies, global state, difficult constructors, or other barriers preventing test creation.
 metadata:
   category: 'Seam Refactoring'
   tags: ['seams', 'refactoring', 'testability', 'legacy-code', 'dependency-breaking']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Stage 2 Seam Refactoring Planner
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -30,7 +37,8 @@ These seam techniques apply to **all service types**. Service classification aff
 ## Ownership Boundary
 
 - **Owns**: canonical seam pattern selection and the Stage 2 behavior-preserving seam plan
-- **Does not own**: blocker taxonomy detection or cross-component prioritization
+- **Does not own**: blocker taxonomy detection, cross-component prioritization, or production edits
+- **Hands off to**: `test-apply-seam-refactoring` to apply and prove the approved plan
 - **Consumes input from**:
   - `test-analyze-testability-blockers` for blocker evidence and target ordering when multiple targets exist
 
@@ -43,6 +51,10 @@ Before producing the final seam plan, require:
 3. target priority when multiple candidates exist
 
 If prerequisites are missing, stop and request them explicitly.
+
+Before selecting a pattern, check whether the target repo already has a precedent
+seam for the same kind of blocker elsewhere. Prefer the established local pattern
+over an equally-valid alternative from the catalog, for consistency.
 
 ## Language Scope
 
@@ -101,7 +113,7 @@ Do not duplicate or redefine this mapping in upstream blocker-detection skills; 
 | 4   | Parameterize Method                  | Hardcoded Variable in Method               |
 | 5   | Extract and Override Call            | Hardcoded Variable in Method               |
 | 6   | Extract and Override Factory Method  | Hardcoded Instance Variable in Constructor |
-| 7   | Extract and Override Getter          | Hardcoded Constructor or Method dependency |
+| 7   | Extract and Override Getter          | Hardcoded Variable in Method               |
 | 8   | Introduce Static Setter              | Local Variable Hardcoded to Singleton      |
 | 9   | Supersede Instance Variable          | Hardcoded Instance Variable in Constructor |
 | 10  | Adapt Parameter                      | Difficult Parameter                        |
@@ -122,7 +134,7 @@ If multiple patterns are valid, choose the smallest behavior-preserving seam fir
 - Prefer one seam at a time over large cleanup batches.
 - Use IDE-safe structural refactorings where possible.
 - Verify compile/build and existing tests after every seam.
-- Commit atomically per seam when changes are applied.
+- Hand the approved plan to `test-apply-seam-refactoring` for one atomic seam change at a time.
 - Create seams for infrastructure and non-determinism, not for domain objects.
 - Favor the smallest seam that unlocks characterization or regression tests.
 - Treat blocker detection as input, not output: this skill consumes blocker evidence rather than owning the blocker taxonomy.
@@ -141,10 +153,8 @@ If blocker evidence is missing, request `test-analyze-testability-blockers` outp
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Safety Checks
 
@@ -223,7 +233,7 @@ For languages with first-class functions, consider **Peel and Slice** as a light
 
 ### Build Verification
 
-After applying all seams:
+After `test-apply-seam-refactoring` applies the selected seam:
 
 ```bash
 {build command}
@@ -232,15 +242,12 @@ After applying all seams:
 
 Apply and verify one seam at a time before moving to the next candidate seam.
 
-### Commit Message
+### Decision Contract
 
-```
-refactor: introduce seam for {purpose}
-
-- Apply {RefactoringName} to enable testing of {method}
-- Behavior-preserving change
-- Enables injection of test doubles
-```
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ````
 
 ## Worked Examples

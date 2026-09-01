@@ -94,7 +94,10 @@ A pipeline for adding tests to legacy code, `test-plan-quality-workflow` orchest
 **5. Refactor & Validate**
 
 - **[test-refactor-test-smells](./skills/test-refactor-test-smells/SKILL.md)**: Step-by-step refactoring guidance for fixing test quality issues (Testing Theater, Implementation Coupling, etc.).
+- **[test-apply-seam-refactoring](./skills/test-apply-seam-refactoring/SKILL.md)**: Apply one approved, behavior-preserving seam plan in a separate change — the execution half of `test-plan-seam-refactoring`.
 - **[test-validate-characterization-quality](./skills/test-validate-characterization-quality/SKILL.md)**: Validate that characterization tests are deterministic, well-covered, and actually catch bugs before trusting them.
+
+Shared gate/evidence/retry/verdict policy for the whole pipeline lives in [`test-quality-policy.md`](./skills/test-quality-policy.md); the common `Result`/`Missing Evidence`/`Next Owner` report shape is [`test-skills-decision-contract.md`](./skills/test-skills-decision-contract.md); the full routed map of both workflows is [`test-skills-workflow-diagram.md`](./skills/test-skills-workflow-diagram.md). The three-agent coverage-uplift loop built on top of this pipeline (`coverage-auditor` / `coverage-executor` / `coverage-reviewer`) lives under `opencode/agents/` — see each agent's own file.
 
 ## Code Quality & Review
 

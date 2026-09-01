@@ -1,4 +1,5 @@
-import { basename } from 'node:path';
+import { resolve as resolvePath } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { assessTestCoverageReadiness } from './test-coverage-readiness.mjs';
 
 function parseArgs(argv) {
@@ -32,7 +33,10 @@ function splitCsv(value) {
     .filter(Boolean);
 }
 
-function detectScope({ changedTests, productionTargets, taxonomyLevel }) {
+function detectScope({ changedTests, productionTargets, taxonomyLevel, targetKind }) {
+  if (['flow', 'boundary'].includes(targetKind)) return 'flow';
+  if (['function', 'method', 'single-test'].includes(targetKind)) return 'single-test';
+  if (['package', 'namespace'].includes(targetKind)) return 'package';
   if (['acceptance', 'integration', 'contract', 'e2e'].includes(taxonomyLevel)) {
     return 'flow';
   }
@@ -45,11 +49,19 @@ function detectScope({ changedTests, productionTargets, taxonomyLevel }) {
   return 'package';
 }
 
-function testCommandFor(platform, changedTests) {
+function testCommandFor(platform, changedTests, manager, runner) {
   const firstTest = changedTests[0] ?? '<test-file>';
+  const goPackage = firstTest.includes('/') ? `./${firstTest.slice(0, firstTest.lastIndexOf('/'))}` : './...';
   switch (platform) {
     case 'javascript':
-      return `pnpm exec vitest run ${changedTests.join(' ') || '<test-file>'}`;
+      if (runner === 'Jest') {
+        return manager === 'npm'
+          ? `npm exec -- jest --runInBand --runTestsByPath ${changedTests.join(' ') || '<test-file>'}`
+          : `${manager} exec jest --runInBand --runTestsByPath ${changedTests.join(' ') || '<test-file>'}`;
+      }
+      return manager === 'npm'
+        ? `npm exec -- vitest run ${changedTests.join(' ') || '<test-file>'}`
+        : `${manager} exec vitest run ${changedTests.join(' ') || '<test-file>'}`;
     case 'python':
       return `pytest ${changedTests.join(' ') || '<test-path>'}`;
     case 'java':
@@ -57,30 +69,43 @@ function testCommandFor(platform, changedTests) {
     case 'csharp':
       return `dotnet test --filter FullyQualifiedName~<test-name-or-class>`;
     case 'go':
-      return `go test ${changedTests.join(' ') || './...'} `;
+      return `go test ${goPackage}`;
     case 'rust':
       return `cargo test ${firstTest}`;
+    case 'c':
+      return 'ctest --test-dir build --output-on-failure';
     default:
       return 'Manual targeted test command required';
   }
 }
 
-function coverageCommandFor(platform, changedTests, productionTargets) {
+function coverageCommandFor(platform, changedTests, productionTargets, manager, runner) {
   const firstTarget = productionTargets[0] ?? '<target>';
   const tests = changedTests.join(' ');
+  const pythonTarget = firstTarget.replace(/^src\//, '').replace(/\.py$/, '').replaceAll('/', '.');
+  const goPackage = firstTarget.includes('/') ? `./${firstTarget.slice(0, firstTarget.lastIndexOf('/'))}` : './...';
   switch (platform) {
     case 'javascript':
-      return `pnpm exec vitest run --coverage ${tests || '<test-file>'}`;
+      if (runner === 'Jest') {
+        return manager === 'npm'
+          ? `npm exec -- jest --coverage --runInBand --runTestsByPath ${tests || '<test-file>'}`
+          : `${manager} exec jest --coverage --runInBand --runTestsByPath ${tests || '<test-file>'}`;
+      }
+      return manager === 'npm'
+        ? `npm exec -- vitest run --coverage ${tests || '<test-file>'}`
+        : `${manager} exec vitest run --coverage ${tests || '<test-file>'}`;
     case 'python':
-      return `pytest --cov ${firstTarget} ${tests || '<test-path>'}`;
+      return `pytest --cov=${pythonTarget} --cov-branch ${tests || '<test-path>'}`;
     case 'java':
       return `Run JaCoCo-enabled test task scoped to ${firstTarget}`;
     case 'csharp':
-      return 'dotnet test --collect:"XPlat Code Coverage"';
+      return 'dotnet test --filter FullyQualifiedName~<test-name-or-class> --collect:"XPlat Code Coverage"';
     case 'go':
-      return `go test -coverprofile=coverage.out ${firstTarget}`;
+      return `go test -coverprofile=coverage.out ${goPackage}`;
     case 'rust':
       return `cargo llvm-cov ${tests || ''}`.trim();
+    case 'c':
+      return 'ctest --test-dir build --output-on-failure && gcovr --xml-pretty -o coverage.xml';
     default:
       return 'Manual targeted coverage command required';
   }
@@ -101,6 +126,8 @@ function configShapeFor(platform, scope) {
       return [...common, 'package path', 'coverprofile'];
     case 'rust':
       return [...common, 'coverage tool', 'crate/test selection'];
+    case 'c':
+      return [...common, 'CTest target', 'compiler coverage flags', 'gcovr report'];
     default:
       return common;
   }
@@ -110,9 +137,13 @@ export function createTargetedCoveragePlan(input) {
   const productionTargets = splitCsv(input.productionTargets ?? input.targets);
   const changedTests = splitCsv(input.changedTests ?? input.tests);
   const taxonomyLevel = input.taxonomyLevel ?? 'unit';
-  const readiness =
-    input.readiness ?? assessTestCoverageReadiness(input.repoPath ?? '.', { checkCommands: false });
-  const selectedScope = detectScope({ changedTests, productionTargets, taxonomyLevel });
+  const targetKind = input.targetKind ?? 'file';
+  const readiness = input.readiness ?? assessTestCoverageReadiness(input.repoPath ?? '.');
+  const selectedScope = detectScope({ changedTests, productionTargets, taxonomyLevel, targetKind });
+  // A plan must not present a runnable command when the tooling is absent. The
+  // command is what an agent copies, so emitting one implies readiness.
+  const toolUnavailable = readiness.readiness === 'missing-tool' || readiness.readiness === 'target-not-found';
+  const unverified = readiness.readiness === 'declared-unverified';
 
   return {
     platform: readiness.platform,
@@ -131,26 +162,45 @@ export function createTargetedCoveragePlan(input) {
             ? 'One production module is protected by a small related test slice.'
             : 'Several related targets require a containing package-level coverage run.',
     configShape: configShapeFor(readiness.platform, selectedScope),
-    testCommand: testCommandFor(readiness.platform, changedTests),
-    coverageCommand: coverageCommandFor(readiness.platform, changedTests, productionTargets),
+    testCommand: toolUnavailable
+      ? null
+      : testCommandFor(readiness.platform, changedTests, readiness.packageManager ?? 'npm', readiness.testRunner),
+    coverageCommand: toolUnavailable
+      ? null
+      : coverageCommandFor(readiness.platform, changedTests, productionTargets, readiness.packageManager ?? 'npm', readiness.testRunner),
+    runnable: !toolUnavailable,
+    blockingReason: toolUnavailable
+      ? `Coverage tooling is ${readiness.readiness} for this target, so no runnable command was emitted. Report this as Missing Evidence and route the setup path to a human; do not invent a number.`
+      : unverified
+        ? `Coverage tooling is declared but unverified. Run "${readiness.verifyCommand}" before trusting a number from this command.`
+        : null,
     coverageExpectations: 'line coverage required; branch coverage when the platform supports it',
-    setupActions:
-      readiness.readiness === 'missing-tool'
-        ? {
-            installCommand: readiness.installCommand,
-            verifyCommand: readiness.verifyCommand,
-            configShape: readiness.configShape,
-          }
-        : 'Reuse existing test and coverage setup',
+    // The plan produces evidence; this names the evaluator that adjudicates it,
+    // so the gate is enforced by code rather than asserted in prose.
+    gateEvaluator:
+      'node .skills/test-evaluate-targeted-coverage/scripts/evaluate-coverage-gate.mjs --filePath <report> --lineGate <line> --branchGate <branch|n/a> --target <target> --sourceRevision <revision> --command <command>',
+    setupActions: toolUnavailable
+      ? {
+          installCommand: readiness.installCommand,
+          verifyCommand: readiness.verifyCommand,
+          configShape: readiness.configShape,
+        }
+      : 'Reuse existing test and coverage setup',
   };
 }
 
 function main() {
-  const args = parseArgs(process.argv);
-  const result = createTargetedCoveragePlan(args);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  try {
+    const args = parseArgs(process.argv);
+    const result = createTargetedCoveragePlan(args);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    if (!result.runnable) process.exitCode = 3;
+  } catch (error) {
+    process.stderr.write(`${JSON.stringify({ error: 'BAD_ARGS', message: error.message }, null, 2)}\n`);
+    process.exitCode = 2;
+  }
 }
 
-if (basename(process.argv[1] ?? '') === 'targeted-coverage-plan.mjs') {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolvePath(process.argv[1])).href) {
   main();
 }

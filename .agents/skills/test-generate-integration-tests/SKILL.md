@@ -4,16 +4,23 @@ description: Generate integration tests that exercise a driven adapter against i
 metadata:
   category: 'Characterization Testing'
   tags: ['integration-testing', 'outside-in', 'adapters', 'real-infrastructure', 'boundary']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Outside-In Integration Test Specialist
 
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
+
 ## Purpose
 
-Generate integration tests that lock the behavior of a **driven adapter against its real external system**, covering the boundary the acceptance layer deliberately mocked.
+Generate integration tests that lock the behavior of a **driven adapter against its real infrastructure**, covering the boundary the acceptance layer deliberately mocked.
 
 This is the **innermost** step of the outside-in add-missing-tests order — **Acceptance → Unit → Integration**. After acceptance tests prove the use case with the external world mocked and unit tests pin branch-heavy domain internals, integration tests prove each adapter actually talks to its real infrastructure correctly.
 
@@ -22,16 +29,23 @@ You are documenting how the adapter maps to and from the external system today, 
 Shared quality gates for determinism, representative coverage, and mutation effectiveness belong to `test-validate-characterization-quality`.
 Targeted test and coverage execution belongs to `test-evaluate-targeted-coverage`.
 
-## Boundary (from docs/RULES.md)
+## Boundary
 
-- **Boundary**: a single **adapter ↔ external system** (repository ↔ database, API client ↔ external API, file adapter ↔ file system, queue adapter ↔ message broker).
+- **Boundary**: a single **adapter ↔ infrastructure** (repository ↔ database or in-memory store, API client ↔ external API, file adapter ↔ file system, queue adapter ↔ message broker).
 - **Mock**: nothing within the boundary.
 - **Use real**: the real database, real external API (or a faithful local/emulated instance), real file system, real serialization.
 - **Responsibility**: schema/mapping fidelity, external API communication, error handling, transaction/serialization behavior, entity ↔ domain conversion.
 
-> Note (from RULES.md): "Integration test" here is strictly the adapter-to-infrastructure boundary. It is **not** a broad system test. Whole-feature behavior belongs to acceptance tests; single-class logic belongs to unit tests.
+**Adapter rule**: any production adapter that implements a driven port is
+infrastructure for this skill. This includes a process-local or in-memory
+repository when it is the production adapter implementation under test. Treat its
+real storage (for example a `Map`) as the faithful local infrastructure; do not
+reject the target merely because no networked service exists.
 
-For this codebase, integration targets include `Dynamo*Repository` classes against a real/local DynamoDB, the Cloudinary and SmartAssets clients against their real endpoints, and SQS publishers/consumers against a real queue.
+> Apply the target repository's testing policy, if present. An integration test
+> is strictly the adapter-to-infrastructure boundary, not a broad system test.
+> Whole-feature behavior belongs to acceptance tests; single-class logic belongs
+> to unit tests.
 
 ## When to Use
 
@@ -64,18 +78,19 @@ Do NOT use this skill when:
 Before generating tests, require:
 
 1. the adapter and its external system identified
-2. a real or faithful local instance of the external system available (e.g. local DynamoDB, sandbox API, temp file system)
+2. the adapter's real infrastructure available (e.g. local database, sandbox API,
+   temp file system, or the production adapter's in-memory store)
 3. setup/teardown strategy that keeps tests isolated and repeatable
 4. determinism controls for time/random/IDs and any server-side state
 
 If the real infrastructure cannot be provisioned, return `BLOCKED` with the missing dependency; do not silently mock inside the boundary.
 
+Before writing new cases, check the target's existing integration tests (if any) or a neighboring adapter's tests for isolation and naming convention already in use.
+
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Core Principle
 
@@ -84,7 +99,7 @@ Drive from **behavior, not coverage**. Each integration test maps to an observab
 ## Generation Rules
 
 - ✅ Exercise the adapter through its public port interface (the same interface the domain depends on).
-- ✅ Use the real external system (or a faithful local/emulated instance); never mock inside the boundary.
+- ✅ Use the real infrastructure (or a faithful local/emulated instance); never mock inside the boundary.
 - ✅ Cover the round trip: write via the adapter, then read back and assert the domain object is faithfully reconstructed.
 - ✅ Cover error handling: not-found, conflict, validation/transport failures, and how the adapter translates them into domain `Result` errors.
 - ✅ Build domain inputs with Object Mothers / builders; keep domain objects real.
@@ -110,9 +125,9 @@ Provide one evidence line per row.
 
 ```markdown
 Technique: Integration (Outside-In)
-Layer: integration (middle) — previous: acceptance, next: unit
-Boundary: {adapter} ↔ {external system}
-Infrastructure Used: {real DB/API/FS or faithful local instance}
+Layer: integration (innermost) — previous: unit, next: validation
+Boundary: {adapter} ↔ {infrastructure}
+Infrastructure Used: {real DB/API/FS or faithful local/in-memory instance}
 Isolation Strategy: {unique keys/namespaces + teardown}
 Behavior Summary: {how the adapter maps/communicates today}
 
@@ -134,16 +149,15 @@ Behavior Coverage:
 | Failure mode | {Detected\|Considered-Not-Found\|N/A} | {ref}    |
 
 Coverage/Mutation Evidence: {via test-evaluate-targeted-coverage / test-evaluate-focused-mutation}
-Handoff: {test-generate-unit-characterization-tests for mapping/error logic Z}
+Handoff: {test-validate-characterization-quality, with coverage and mutation evidence attached}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```
-
-## Success Criteria
-
-- Each test drives the adapter through its port against real infrastructure with no in-boundary mocks.
-- Round-trip mapping and error translation are both covered.
-- Tests are isolated, deterministic, and clean up their state.
-- Every test maps to a named adapter behavior, not a coverage line.
-- Residual branch-heavy logic is handed off to the unit layer.
 
 ## Related Skills
 

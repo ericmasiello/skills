@@ -4,12 +4,19 @@ description: Provide alternative approaches when standard seam refactoring is to
 metadata:
   category: 'Fallback Strategies'
   tags: ['fallback', 'risk-mitigation', 'alternative-approaches', 'legacy-code']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Stage 2 Legacy Fallback Strategy Selector
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -38,11 +45,10 @@ Use it to select and justify one primary fallback strategy from:
 
 ## When to Use
 
-Use this skill when default seam planning has been assessed and deemed unsafe, too expensive, or stalled.
+Use this skill once the "Scope" condition above is met: default seam planning
+already assessed and deemed unsafe, too expensive, or stalled.
 
 ## Prerequisite Gate
-
-Invoke this skill only after blocker evidence exists and standard seam planning has been deemed unsafe, too expensive, or stalled.
 
 Required before invocation:
 
@@ -50,6 +56,10 @@ Required before invocation:
 2. attempted or considered default seam path from `test-plan-seam-refactoring`
 
 If either is missing, stop and request those inputs first.
+
+Before selecting a strategy, check whether the target repo already has a precedent
+fallback (e.g. an existing Strangler Fig facade) for a similar blocker, and prefer
+extending it over introducing a second, inconsistent approach.
 
 ## Ownership Boundary
 
@@ -170,14 +180,6 @@ When selection is ambiguous, use these tie-breakers in order:
 
 If still tied, choose **Wrap Method** for method-local hotspots and **Strangler Fig** for boundary-wide migration.
 
-## Strategy Summary
-
-- **Wrap Method**: isolate a risky direct call inside an existing method
-- **Sprout Method**: add new behavior beside fragile legacy logic
-- **Sprout Class**: move a cohesive slice into a new delegating class
-- **Higher-level Integration Test**: gain confidence at a stable boundary when unit seams are not yet practical
-- **Strangler Fig**: replace a broad legacy flow through a new boundary or facade over time
-
 ## References (Optional, Manual Read)
 
 Do not treat this section as default runtime knowledge.
@@ -187,40 +189,20 @@ Consult only when the task needs literal strategy definitions, examples, anti-pa
 
 ## Output Requirements
 
-Always provide:
-
-- Primary strategy (one of 5)
-- Why selected (linked to observed blockers)
-- Two-phase migration path
-- Rollback trigger and rollback action
-
-## Deterministic Decision Contract
-
 Every output must include:
 
 - `Primary Strategy`: exactly one of the 5 allowed values
+- `Why`: linked to observed blocker evidence
+- `Phase 1` / `Phase 2`: the two-phase migration path (Phase 1 incremental and
+  behavior-preserving; Phase 2 clearly advances testability)
 - `Rejected Alternatives`: at least two rejected options with short rationale
-- `Rollback Trigger`: measurable signal
+- `Rollback Trigger`: a measurable signal, not a vague one
 - `Rollback Action`: one executable rollback step
-- `Next Owner`: one downstream skill to invoke after strategy selection
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
-
-## Output Quality Checklist
-
-Before finalizing, verify:
-
-- Primary strategy is exactly one of the 5 allowed values.
-- Why statement references observed blocker evidence.
-- Phase 1 is incremental and behavior-preserving.
-- Phase 2 clearly advances testability.
-- Rollback trigger is measurable (not vague).
-- Rollback action is executable in one step.
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Output Format
 
@@ -231,15 +213,14 @@ Before finalizing, verify:
 - Why: {blocker-linked rationale}
 - Phase 1: {incremental step}
 - Phase 2: {next incremental step}
+- Rejected Alternatives: {at least two options with rationale}
 - Rollback Trigger: {signal}
 - Rollback Action: {safe rollback}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {test-apply-seam-refactoring | human | self}
 ```
-
-## Guardrails
-
-- ✅ Keep strategy tied to observed blockers only.
-- ✅ Prefer incremental migration over redesign.
-- ✅ Preserve runtime behavior during Phase 1.
-- ✅ Return to the normal seam-and-test workflow as soon as risk is reduced.
-- ❌ Do not recommend big-bang rewrites.
-- ❌ Do not choose multiple primary strategies.

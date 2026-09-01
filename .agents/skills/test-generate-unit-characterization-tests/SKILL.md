@@ -4,12 +4,19 @@ description: Create unit tests with explicit assertions that lock current behavi
 metadata:
   category: 'Characterization Testing'
   tags: ['unit-testing', 'characterization', 'legacy-code', 'behavior-lock']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Stage 3 Unit Characterization Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -25,14 +32,10 @@ Targeted test and coverage execution belong to `test-evaluate-targeted-coverage`
 
 ## What Unit Characterization Is
 
-Unit characterization captures existing behavior of legacy code without reliable documentation. You explore the system, record actual outputs and observable side effects, then lock those observations as unit tests.
-
-- Not testing "correct" behavior first
-- Testing and documenting "current" behavior first
-
-Unlike Golden Master, this skill uses explicit unit assertions and behavior-focused test names, not approval/snapshot artifacts as the default mechanism.
-
-When the observed behavior supports it, prefer a property-based test over a parameterized test, and prefer a parameterized test over a single-case unit test. Fall back only when the stronger form would stop being understandable, deterministic, or grounded in observed behavior.
+Lock the system's current behavior as observed, not the behavior it should have.
+Unlike Golden Master, use explicit unit assertions and behavior-focused test names,
+not approval/snapshot artifacts as the default mechanism. Test shape preference is
+defined once, below, in "Test Shape Preference."
 
 ## When to Use
 
@@ -44,7 +47,7 @@ Unit is the **middle** layer of the outside-in add-missing-tests order: **Accept
 
 Do not use this skill when:
 
-- seams are not verified yet (`test-plan-seam-refactoring` first)
+- seams are required but not verified yet (`test-plan-seam-refactoring` first)
 - output complexity is better suited for approval testing (`test-generate-golden-master-tests`)
 - you only need planning and not implementation (`test-plan-characterization-tests`)
 
@@ -57,29 +60,31 @@ Do not use this skill when:
 
 Before generating tests, require:
 
-1. seams verified
+1. seams verified, or no seam required for directly constructible, deterministic, observable code
 2. observability of outputs/side effects
-3. determinism controls defined
+3. non-determinism (time/random/ids/order) controlled or normalized
+4. unit scope appropriate — the outer layers (acceptance, integration) have already locked the behaviors they own
+5. at least one real execution observation for every expected value that will be
+   locked; source inspection alone is not an observation
 
 If any prerequisite is missing, stop and request it explicitly.
 
+You may propose an exploratory test before observation, but do not finalize its
+expected value or report `COMPLETE` until real execution records the observed
+output. If execution is unavailable, return `BLOCKED` with that missing evidence.
+
+Before writing a new test, check whether tests already exist for this module or a
+close neighbor in the target repo. Match their existing naming and fixture
+conventions unless they conflict with a rule in this skill.
+
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Stage 3 Position
 
-Unit characterization is not testing ideal behavior. It is a Stage 3 technique for documenting actual current behavior at unit scope so later refactoring stays safe.
-
-## Preconditions
-
-1. Seams are already applied and verified.
-2. Inputs, outputs, and boundary side effects are observable.
-3. Non-determinism (time/random/ids/order) is controlled or normalized.
-4. Unit scope is appropriate after the outer layers (acceptance, integration) have locked the behaviors they own.
+Unit characterization documents actual current behavior at unit scope so later refactoring stays safe.
 
 ## Test Shape Preference
 
@@ -93,17 +98,11 @@ Do not choose a weaker test shape by default. If you do not use the strongest av
 
 ## Progression Strategy
 
-Apply tests incrementally as understanding improves, but move upward in expressive power whenever the behavior justifies it:
-
-1. **Single Unit Test**: capture one concrete observed case when understanding is still narrow.
-2. **Parameterized Unit Tests**: consolidate multiple observed cases into one readable case table.
-3. **Property-Based Tests**: generalize the stable invariant once repeated observations show the rule is trustworthy.
-
-The target end state is the highest-confidence maintainable form the observed behavior allows, not the first form that happens to pass.
+As understanding of the legacy behavior grows, move upward through the same ranking
+stated in "Test Shape Preference" above — do not stop at single-case once a stable
+invariant or a shared assertion structure across cases becomes evident.
 
 ## Property-Based Testing (PBT) Strategy
-
-Prefer property-based tests when observed behavior reveals a stable invariant, relation, or algebraic rule that can be generated safely. Otherwise prefer parameterized tests, then single-case tests.
 
 Read `references/pbt-strategy.md` for PBT value domains, property patterns (invariant/roundtrip/oracle/metamorphic), language tooling, example-count tuning, and shrinking.
 
@@ -111,9 +110,6 @@ Read `references/pbt-strategy.md` for PBT value domains, property patterns (inva
 
 - ✅ Use the characterization loop: write an assertion you expect to fail, run it, let the failure reveal actual behavior, then update the test to lock that observed behavior.
 - ✅ Run real code and capture observed behavior before finalizing assertions.
-- ✅ Prefer property-based tests when the current behavior reveals a stable invariant or relation that can be generated safely.
-- ✅ Otherwise prefer parameterized tests when several concrete observed examples share the same assertion structure.
-- ✅ Use a single-case unit test only when the behavior is too narrow or too irregular for the stronger forms.
 - ✅ Assert explicit outputs and relevant side effects at infrastructure boundaries.
 - ✅ Use fakes/spies/stubs only for boundary dependencies.
 - ✅ Keep domain entities/value objects/aggregates real.
@@ -151,12 +147,9 @@ or mark `Considered-Not-Found` / `Not-Applicable` with a brief reason.
 
 ## Completeness Gate
 
-Before finalizing, include a completeness gate for characterization coverage:
-
-- I/O Characterization: `Detected` | `Considered-Not-Found` | `Not-Applicable`
-- Side-Effect Characterization: `Detected` | `Considered-Not-Found` | `Not-Applicable`
-
-Provide one evidence line per row (test name, assertion, or boundary observation).
+Report `I/O Characterization` and `Side-Effect Characterization` using the shared
+status values in `test-skills-decision-contract.md` (`Detected` |
+`Considered-Not-Found` | `Not-Applicable`), one evidence line per row.
 
 ## Test Naming Guidance
 
@@ -210,6 +203,7 @@ Technique: Unit Characterization
 Taxonomy Level: {acceptance-considered, unit-selected}
 Target: {module/function}
 Behavior Summary: {what current behavior appears to be}
+Observation Evidence: {command/run and observed output, or missing}
 Test Shape: {property-based | parameterized | single}
 Test Shape Rationale: {why stronger forms were used or rejected}
 Progression Stage: {single | parameterized | property-based}
@@ -238,16 +232,14 @@ Characterization Completeness Gate:
 | ---------------------------- | ------------------------------------- | -------- |
 | I/O Characterization         | {Detected\|Considered-Not-Found\|N/A} | {ref}    |
 | Side-Effect Characterization | {Detected\|Considered-Not-Found\|N/A} | {ref}    |
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```
-
-## Success Criteria
-
-- Tests document current behavior clearly and reproducibly.
-- Test names explain behavior and context without reading implementation first.
-- The chosen test shape is the strongest maintainable option supported by observed behavior.
-- Progression advances from single-case to generalized coverage as knowledge grows.
-- Side-effect assertions remain boundary-focused and mock-discipline compliant.
-- Shared quality gate confirms coverage evidence and mutation effectiveness.
 
 ## Related Skills
 
