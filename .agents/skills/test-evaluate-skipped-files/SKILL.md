@@ -4,12 +4,19 @@ description: Evaluate files that are skipped or excluded from testing and covera
 metadata:
   category: 'Test Evaluation'
   tags: ['coverage', 'skipped-files', 'exclusions', 'test-gaps', 'risk-triage']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Skipped Files Evaluation Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -57,10 +64,8 @@ If the skip list cannot be produced, stop and request the coverage/mutation conf
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Core Principle
 
@@ -119,13 +124,32 @@ Use only when the file cannot be read or the mechanism is ambiguous. Report it a
 
 ## Decision Rubric
 
-Apply per file, stopping at the first rule that fires:
+Diagnostics must collect all relevant evidence in one pass. Do not stop at the
+first matching rule. Record every applicable signal in the per-file evidence,
+then make one verdict from the combined record.
 
-1. Any branching, calculation, error handling, validation, or observable side effect present → **Masked gap**.
-2. File is tool-generated/vendored and reproducible → **Legitimate skip** (recommend confirming the generator is the source of truth).
-3. File is purely declarative or a plain data carrier with no logic → **Legitimate skip**.
-4. Skip is a disabled test over real logic → **Masked gap** (flakiness is a separate defect, not a skip justification).
-5. Cannot read the file or mechanism is ambiguous → **Needs-info**.
+For each skipped/excluded file or test, check all of the following:
+
+1. Does the production target contain branching, calculation, error handling,
+   validation, or observable side effects?
+2. Is the mechanism a disabled/quarantined test over that real behavior?
+3. Is the target generated, vendored, declarative, a plain data carrier, or
+   otherwise free of meaningful behavior?
+4. Does an active test already protect the same behavior at least as thoroughly?
+   Compare actual behavior families, boundary values, and mutation evidence;
+   do not infer equivalence from a similar name or coverage percentage alone.
+5. Can the file and skip mechanism both be read unambiguously?
+
+Choose the final verdict after this evidence pass:
+
+- **Needs-info** when the file or mechanism cannot be read unambiguously.
+- **Legitimate skip** when there is no meaningful behavior, or when a disabled
+  test is explicitly superseded by active, at-least-as-strong coverage with
+  documented evidence. Recommend deleting superseded tests rather than keeping
+  disabled reference code.
+- **Masked gap** when meaningful behavior lacks active, equivalent protection.
+  A disabled test over real logic is evidence of a masked gap unless the
+  supersession check proves otherwise. Flakiness alone never justifies a skip.
 
 Escalate a `COMPLETE_WITH_WARNINGS` result whenever any masked gap sits on a high-value or frequently changed file, or when the skip was applied to make a red gate pass.
 
@@ -156,14 +180,6 @@ Escalate a `COMPLETE_WITH_WARNINGS` result whenever any masked gap sits on a hig
 - Blocking Issues: {list or none}
 - Next Owner: {one downstream skill}
 ```
-
-## Success Criteria
-
-- Every skipped/excluded file has exactly one verdict backed by evidence from its contents.
-- No skip is justified from file name, folder, or prior exclusion alone.
-- Masked gaps are ranked and routed to a concrete next owner.
-- Legitimate skips state why the file has no behavior to protect.
-- Files that cannot be read are reported as `Needs-Info`, never guessed.
 
 ## References
 

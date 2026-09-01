@@ -39,11 +39,12 @@ Use this reference when you need a concrete structure for reporting coverage imp
 # Example: run a single test with focused coverage
 pytest tests/test_order.py::test_order_caps_discount -v --cov=src.order
 
-# Example: run focused mutation against changed code
-stryker run --mutate "src/order_processor.py" --testFilter "test_order*"
+# Example: run focused mutation through the project-configured tool
+# See test-evaluate-focused-mutation for native command discovery and scope.
+<project mutation command scoped to src/order_processor.py>
 
 # Example: review only the newly added test file for smells
-/analyze tests/test_order_additions.py
+test-analyze-test-smells tests/test_order_additions.py
 ```
 
 Adjust the commands to the project toolchain, but keep the same sequence: verify the exact gap is covered, verify the suite-level delta, then verify assertion quality.

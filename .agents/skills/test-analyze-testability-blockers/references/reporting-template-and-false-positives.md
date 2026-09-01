@@ -36,12 +36,12 @@ If that sentence cannot be completed with a concrete blocker such as constructor
 
 ### Coverage Gate Results (Required)
 
-| Smell                                  | Status    | Evidence              |
-| -------------------------------------- | --------- | --------------------- | ---------- |
-| 4.2 Local Variable → Global            | {Detected | Considered-Not-Found} | {line/ref} |
-| 4.3 Method Using Globals as Parameters | {Detected | Considered-Not-Found} | {line/ref} |
-| 5.1 Difficult Static Method            | {Detected | Considered-Not-Found} | {line/ref} |
-| 6.1 Difficult Unrelated Method         | {Detected | Considered-Not-Found} | {line/ref} |
+| Smell                                  | Status                                  | Evidence   |
+| -------------------------------------- | --------------------------------------- | ---------- |
+| 4.2 Local Variable → Global            | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
+| 4.3 Method Using Globals as Parameters | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
+| 5.1 Difficult Static Method            | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
+| 6.1 Difficult Unrelated Method         | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
 
 ### Smells Detected
 

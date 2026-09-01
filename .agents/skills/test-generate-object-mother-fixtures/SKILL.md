@@ -4,14 +4,21 @@ description: Generate Object Mother and builder patterns for readable, maintaina
 metadata:
   category: 'Test Fixtures'
   tags: ['object-mother', 'test-data', 'fixtures', 'builders', 'test-setup']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Object Mother Generation Guide
 
 Generate Object Mothers, fluent builders, and related fixture guidance that centralize test data creation and keep tests focused on intent rather than setup noise.
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -73,12 +80,19 @@ Before generating artifacts, require:
 
 If prerequisites are missing, stop and request them explicitly.
 
+An explicit task statement that names the aggregate, repeated setup need, and
+test context satisfies this gate. Inability to inspect existing test files or
+fixture locations is Missing Evidence and a warning, not a blocker, when the
+requested fixture need is already concrete.
+
+Before generating a new mother or builder, check whether one already exists for this
+domain type or a close neighbor in the target repo. Extend or reuse it rather than
+creating a duplicate.
+
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Core Rules
 
@@ -150,6 +164,11 @@ Return Object Mother guidance in this order:
 4. Customization approach: overrides, builder, or options
 5. Supporting mothers for dependent value objects or events if needed
 6. Test usage notes and anti-patterns avoided
+7. Shared decision contract:
+   - `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
+   - `Missing Evidence`: explicit list (empty if none)
+   - `Blocking Issues`: explicit list (empty if none)
+   - `Next Owner`: one downstream skill
 
 ## Required Artifacts
 
@@ -159,10 +178,3 @@ When generation is requested, produce this minimum artifact set:
 2. Optional builder file only if customization complexity justifies it
 3. One short usage example in a test context
 4. One anti-pattern check note explaining what was intentionally avoided
-
-## Success Criteria
-
-- The generated fixture API makes tests shorter and clearer.
-- The default `create()` path yields valid test data.
-- Named scenarios communicate domain intent.
-- Builders and helper methods stay focused on test data construction, not production behavior.

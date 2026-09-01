@@ -4,12 +4,19 @@ description: Run targeted tests with coverage reporting for newly added tests. U
 metadata:
   category: 'Test Execution'
   tags: ['coverage', 'test-execution', 'line-coverage', 'branch-coverage']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Targeted Test And Coverage Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -27,7 +34,11 @@ When script execution is available, prefer these bundled helpers:
 - `node .skills/test-evaluate-targeted-coverage/scripts/targeted-coverage-plan.mjs --productionTargets <csv> --changedTests <csv> --taxonomyLevel <level> --targetKind <kind>`
 - `node .skills/test-evaluate-targeted-coverage/scripts/normalize-coverage-report.mjs --filePath <coverage-report-path>`
 
-Use the bundled paths when documenting or reusing the skill. Use repository convenience wrappers such as `pnpm run coverage:readiness` and `pnpm run coverage:plan` only when those wrappers simply point to these skill-bundled scripts.
+Pass `--repoPath <target-repository>` when the current directory is not the
+target repository. Use the bundled paths when documenting or reusing the skill.
+Use repository convenience wrappers such as `pnpm run coverage:readiness` and
+`pnpm run coverage:plan` only when those wrappers simply point to these
+skill-bundled scripts.
 
 ## When to Use
 
@@ -67,10 +78,8 @@ If any prerequisite is missing, stop and request it explicitly.
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Core Principle
 
@@ -149,6 +158,9 @@ Prefer the repository's existing test runner and coverage setup if already confi
 - Python: `pytest` with `pytest-cov`
 - C#: `dotnet test` with `coverlet` or built-in collector integration
 - Go: `go test -cover`
+- Java: Maven or Gradle with the JaCoCo plugin and a generated XML or CSV report
+- Rust: `cargo llvm-cov` with LCOV or JSON output
+- C/C++: `gcovr` after the target build enables GCC or Clang coverage instrumentation
 
 ## Platform Configuration Guidance
 
@@ -157,7 +169,7 @@ Keep the main skill focused on tool selection, scope, and report shape.
 Read `references/coverage-config-examples.md` when you need:
 
 - platform-specific coverage setup examples
-- minimal config snippets for TypeScript / JavaScript, Python, C#, or Go
+- minimal config snippets for TypeScript / JavaScript, Python, C#, Go, Java, Rust, or C/C++
 - example coverage commands and reporter choices
 
 ## Output Requirements
@@ -182,7 +194,12 @@ Supported normalization inputs:
 
 - Istanbul/Vitest/Jest coverage summary JSON
 - `lcov.info`
-- text summary output with a `TOTAL` or `All files` line
+- coverage.py JSON
+- JaCoCo CSV
+- Go coverprofile
+- gcov text
+- Cobertura XML
+- text summary output with a `TOTAL` or `All files` line, including pytest-cov
 
 Normalized output shape:
 
@@ -216,15 +233,14 @@ If a tool does not provide a metric directly, keep counts null and mark unsuppor
 - Coverage Command: {targeted coverage command}
 - Coverage Expectations: {line/branch metrics if supported}
 - Normalized Coverage Report: {path or inline JSON summary}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```
-
-## Success Criteria
-
-- Test and coverage tooling are checked before coverage is claimed.
-- Coverage runs stay focused on the changed protection area.
-- Missing tools produce explicit installation and minimal configuration guidance.
-- Coverage results can be normalized into one consistent report shape for downstream quality gates.
-- Coverage evidence is narrow, reproducible, and attributable.
 
 ## Troubleshooting
 

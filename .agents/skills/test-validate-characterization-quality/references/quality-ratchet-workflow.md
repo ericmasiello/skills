@@ -56,6 +56,6 @@ Each technique catches different gaps:
 
 ## Mutation Testing Phase Rule
 
-> **Deferred to Phase 2.25**: Mutation testing runs ONCE per feature as final quality gate at orchestrator Phase 2.25 (after all TDD steps complete). Do NOT run mutation testing during inner TDD loop.
+> **Timing rule**: Run mutation testing after a coherent behavior slice is green and its focused tests exist. Do not run it inside every red-green-refactor micro-cycle.
 
 This skill validates characterization work, which occurs outside the TDD inner loop. For new TDD features, mutation testing happens only at the final quality gate, not during red-green-refactor cycles.

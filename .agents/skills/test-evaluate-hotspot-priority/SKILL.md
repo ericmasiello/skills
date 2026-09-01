@@ -4,12 +4,19 @@ description: Compute a deterministic hotspot score (change frequency × complexi
 metadata:
   category: 'Test Evaluation'
   tags: ['hotspot', 'prioritization', 'change-frequency', 'complexity', 'coverage-ranking']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Hotspot Priority Ranking Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -30,7 +37,7 @@ computing the formula by hand:
 
 - `node .skills/test-evaluate-hotspot-priority/scripts/hotspot-rank.mjs --paths <csv> --lineCoverages <csv> [--branchCoverages <csv>] [--complexities <csv>] [--repoPath <path>] [--since "<git date expr>"]`
 - `computeChangeFrequency(repoPath, targetPath, { since })` — `.skills/test-evaluate-hotspot-priority/scripts/change-frequency.mjs`
-- `computeComplexityProxy(filePath, { explicitComplexity })` — `.skills/test-evaluate-hotspot-priority/scripts/complexity-proxy.mjs`
+- `computeComplexityProxy(filePath, { explicitComplexity })` — `.skills/test-evaluate-hotspot-priority/scripts/complexity-proxy.mjs`; accepts a source file or module directory and sums recognized source-file LOC for directories
 - `computeHotspotScore(...)` / `rankModules(...)` — `.skills/test-evaluate-hotspot-priority/scripts/hotspot-rank.mjs`
 
 `--paths`, `--lineCoverages`, and (if provided) `--complexities`/`--branchCoverages` are parallel CSV
@@ -92,10 +99,11 @@ If any prerequisite is missing, stop and request it explicitly rather than subst
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
+Report the shared fields defined in `test-skills-decision-contract.md`, with these
+skill-specific values:
+
 - `Missing Evidence`: any module that could not be scored (see `unresolved` in the script output),
   and any module scored on line coverage alone because branch coverage was not supplied
-- `Blocking Issues`: explicit list (empty if none)
 - `Next Owner`: `coverage-auditor` (fuse ranking with gap kind + gate) or the requesting caller
 
 ## The Formula
@@ -134,9 +142,8 @@ repo. It is not comparable across repos or across runs with a different `--since
 2. If a language-specific cyclomatic complexity tool is available, run it and pass the values via
    `--complexities`; otherwise omit it and accept the LOC proxy.
 3. Run `hotspot-rank.mjs` with the parallel `--paths` / `--lineCoverages` / `--branchCoverages` /
-   `--complexities` lists. Always pass `--branchCoverages` when you have the numbers — do not rely on
-   line coverage alone if branch coverage was already measured, since a line-only score silently
-   under-ranks branch-only gaps (100% line / <100% branch modules would otherwise score 0).
+   `--complexities` lists. Always pass `--branchCoverages` when you have the numbers — see "The
+   Formula" above for why line-only scoring under-ranks branch-only gaps.
 4. Read `ranked` (highest score first) — check each entry's `bindingFactor` (`"line"` or `"branch"`)
    to see which gap actually drove the score — and `unresolved` (modules that could not be scored —
    report these as `Missing Evidence`, never drop them silently).
@@ -165,16 +172,5 @@ Return the script's JSON as-is, or summarize it:
 - Result: COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED
 - Missing Evidence: {list or none}
 - Blocking Issues: {list or none}
-- Next Owner: coverage-auditor
+- Next Owner: caller/orchestrator
 ```
-
-## Success criteria
-
-- Every ranked score is backed by a real git command and a caller-supplied coverage number — nothing
-  invented.
-- Re-running with the same repo state and inputs produces an identical ranking (determinism).
-- Modules that cannot be scored are reported under `unresolved`/`Missing Evidence`, never silently
-  dropped or defaulted.
-- A module that is 100% line-covered but has a real uncovered branch never silently scores 0 —
-  `--branchCoverages` is supplied whenever branch data is available, and the max-of-line-and-branch
-  uncovered fraction, not line alone, drives the score.

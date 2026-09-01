@@ -54,7 +54,7 @@ Applicability labels:
 
 ### 7. Extract and Override Getter
 
-- Solves: Hardcoded Constructor or Method dependency
+- Solves: Hardcoded Variable in Method
 - Use when: lazy access is safer than constructor-time overriding
 - Result: the dependency is exposed through an overridable getter
 - Applicability: TypeScript `Situational` | Python `Situational` | C# `Most Applicable` | Go `Usually Not Applicable`

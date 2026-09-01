@@ -4,12 +4,19 @@ description: Validate quality and effectiveness of characterization tests before
 metadata:
   category: 'Quality Gates'
   tags: ['quality-gate', 'test-validation', 'coverage', 'mutation-testing', 'determinism']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Stage 4 Legacy Characterization Gate
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -62,18 +69,15 @@ Before gate adjudication, require:
 
 1. characterization outputs from Stage 3
 2. coverage evidence
-3. mutation evidence
+3. focused mutation evidence, including e2e targets
 
 If prerequisites are missing, return `BLOCKED` with missing evidence.
 
 ## Required Decision Output
 
-Every invocation must return this compact decision contract:
-
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list of required evidence not provided (empty if none)
-- `Blocking Issues`: explicit list of issues preventing pass (empty if none)
-- `Next Owner`: exactly one next owner skill to invoke
+Every invocation must return the shared fields defined in
+`test-skills-decision-contract.md` (`Result`, `Missing Evidence`, `Blocking Issues`,
+`Next Owner`).
 
 ## Core Rules
 
@@ -145,13 +149,13 @@ Every report must include evidence for all of the following:
 
 Use the minimum shared gate from `test-evaluate-focused-mutation`:
 
-- `Minimum Gate`: mutation score >= 85%
+- `Minimum Gate`: project mutation gate, or >= 85% by default
 
 Decision rule:
 
-- `PASS`: >= 85% and surviving mutants are triaged
-- `PASS_WITH_WARNINGS`: >= 85% with documented equivalent/deferred mutants or scope widened because the platform could not support a narrower run
-- `FAIL`: < 85% or surviving mutants are left unexplained
+- `PASS`: meets the applicable gate and surviving mutants are triaged
+- `PASS_WITH_WARNINGS`: meets the applicable gate with documented equivalent/deferred mutants or a justified wider scope
+- `FAIL`: below the applicable gate, missing mutation evidence, or unexplained survivors
 
 ## When E2E Is Acceptable
 
@@ -161,7 +165,7 @@ E2E characterization is allowed only when one of these is true:
 - lower-level seams are not yet available and a temporary high-level safety net is the smallest safe move
 - system-level orchestration is the behavior being characterized
 
-If e2e is chosen, the report must state why acceptance, unit, or integration characterization was not sufficient yet.
+If e2e is chosen, the report must state why acceptance, unit, or integration characterization was not sufficient yet. It must also include focused mutation evidence for the production behavior under test. Fault injection can supplement, not replace, mutation evidence.
 
 ## Combined PBT + Mutation Quality Workflow
 
@@ -174,7 +178,6 @@ Read `references/quality-ratchet-workflow.md` for the staged workflow, when to a
 ```markdown
 # Legacy Characterization Quality Gate
 
-- Result: {PASS|PASS_WITH_WARNINGS|FAIL}
 - Taxonomy Level: {acceptance|unit|integration|contract|e2e}
 - Characterization Technique: {explicit assertions|Golden Master|mixed}
 - Target: {module/function/flow}
@@ -186,24 +189,19 @@ Read `references/quality-ratchet-workflow.md` for the staged workflow, when to a
 - Coverage: {command + line summary + branch summary if available}
 - Normalized Coverage: {normalized JSON summary or report path if available}
 - Coverage Environment: {installed/configured state + setup actions if needed}
-- Mutation Testing: {tool + command + scope + score}
+- Mutation Testing: {tool + exact command + scope + score + source revision + report location + eligible-mutant denominator + exclusions + timeout status}
 - Mutation Environment: {installed/configured state + setup actions if needed}
 - Test Smell Review: {clean | findings + remediation plan}
 - Surviving Mutants: {triage summary}
 - Gate Notes: {missing evidence, follow-up, or equivalent-mutant justification}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {coverage-auditor | human | self}
 ```
-
-## Success Criteria
-
-- Both strategy skills share one consistent gate for coverage and mutation evidence.
-- Focused test and coverage execution are delegated to one reusable platform-aware skill.
-- Focused mutation scope is delegated to one reusable platform-aware skill.
-- Good line coverage is backed by strong mutation evidence, not reported alone.
-- Explicit-assertion tests use the strongest maintainable shape supported by observed behavior instead of defaulting to single examples.
-- Approval-test breadth comes from an explicit maintainable input-space strategy, not ad hoc example selection.
-- The touched test area remains free of significant test smells.
-- E2E usage is justified rather than treated as default characterization.
-- Surviving mutants are actionable, not ignored.
 
 ## Related Skills
 

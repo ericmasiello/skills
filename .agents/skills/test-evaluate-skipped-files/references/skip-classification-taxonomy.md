@@ -71,7 +71,7 @@ Any of the following means the skip hides real, assertable behavior:
 - **Calculation / transformation**: mapping with rules, parsing, formatting, arithmetic, aspect-ratio or locale logic.
 - **Error handling**: `try/catch`, `Result` failure branches, retries, fallbacks, tombstones.
 - **Validation**: value-object `Create()` rules — these are the exact domain rules the codebase relies on.
-- **Side effects**: persistence, SQS publish, HTTP calls, Cloudinary/SmartAssets writes with observable outcomes.
+- **Side effects**: persistence, message publishing, HTTP calls, or external service writes with observable outcomes.
 - **Quarantined behavior**: a skipped/`xfail` test that used to protect real logic.
 
 ```csharp

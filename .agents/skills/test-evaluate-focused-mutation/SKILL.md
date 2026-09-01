@@ -1,15 +1,22 @@
 ---
 name: test-evaluate-focused-mutation
-description: Run mutation tests on newly added tests to verify they catch real bugs. Use when you say 'run mutation tests', 'test the tests', 'validate test quality', 'mutation testing', or need proof that new characterization tests detect actual regressions. Provides platform-specific tool selection and enforces 85% minimum kill rate.
+description: Run mutation tests on newly added tests to verify they catch real bugs. Use when you say 'run mutation tests', 'test the tests', 'validate test quality', 'mutation testing', or need proof that new characterization tests detect actual regressions. Provides platform-specific tool selection, and adjudicates the project mutation gate with a bundled evaluator rather than by assertion.
 metadata:
   category: 'Test Execution'
   tags: ['mutation-testing', 'test-quality', 'coverage', 'test-validation']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 5
   status: experimental
 ---
 
 # Focused Mutation Testing Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -23,7 +30,8 @@ This skill exists because mutation testing is expensive. Its job is to decide:
 - whether that tool is already installed and configured
 - how to install and minimally configure it if missing
 - what configuration shape is required on that platform
-- whether the result clears the minimum quality gate
+- whether the result clears the project quality gate, adjudicated by
+  `scripts/evaluate-mutation-report.mjs` rather than asserted in prose
 
 ## Deterministic Helpers
 
@@ -32,7 +40,8 @@ This skill bundles its deterministic helpers inside its own `scripts/` folder so
 When the environment allows script execution, prefer these bundled helpers to reduce guesswork and keep the mutation plan reproducible:
 
 - `node .skills/test-evaluate-focused-mutation/scripts/mutation-readiness.mjs <repo-path>` to detect platform, selected tool, install/config readiness, and setup commands
-- `node .skills/test-evaluate-focused-mutation/scripts/focused-mutation-plan.mjs --productionTargets <csv> --changedTests <csv> --taxonomyLevel <level> --targetKind <kind>` to generate a deterministic focused mutation plan
+- `node .skills/test-evaluate-focused-mutation/scripts/focused-mutation-plan.mjs --productionTargets <csv> --changedTests <csv> --taxonomyLevel <level> --targetKind <kind> [--mutationGate <n>]` to generate a deterministic focused mutation plan
+- `node .skills/test-evaluate-focused-mutation/scripts/evaluate-mutation-report.mjs --filePath <report> --gate <n> --target <target> --sourceRevision <rev> --command <cmd> --triage <triage.json>` to **adjudicate** the gate. This is the only sanctioned way to claim a mutation result passed. It exits `0` on PASS, `7` when the score is below the gate, and `5` when the evidence is missing — including zero eligible mutants, a denominator wrecked by compile errors, and unclassified survivors.
 
 Use the bundled script paths when:
 
@@ -40,9 +49,9 @@ Use the bundled script paths when:
 - reusing the skill in another repository
 - you need the execution path to stay explicitly tied to this skill package
 
-Use repository convenience wrappers such as `pnpm run mutation:readiness` and `pnpm run mutation:plan` when:
+Use target-repository convenience wrappers (for example `pnpm run mutation:readiness`) only when:
 
-- working inside this repository
+- working inside the target repository
 - you want shorter commands for manual local execution
 - package scripts already point to the skill-bundled helpers and do not add different behavior
 
@@ -79,10 +88,8 @@ If any prerequisite is missing, stop and request it explicitly.
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Core Principle
 
@@ -126,7 +133,18 @@ Before trusting a mutation run's output (or its absence/crash), verify the invok
 
 - Use the ecosystem's explicit local-invocation form rather than the bare command name: `dotnet tool run <tool>` for .NET local tools, `npx <tool>` or the package-manager-scoped binary for Node, etc.
 - Confirm the printed version banner matches the manifest/lockfile-pinned version before concluding the tool can't handle the scenario (e.g. cross-project reference resolution, a specific SDK version) — a stale global version failing at something the pinned version handles fine looks identical to a genuine tool limitation until the version is checked.
-- If a mismatch is found, record the correct invocation form (and the working directory it must be run from, if project-scoped) so future runs in this repository don't rediscover it.
+- If a mismatch is found, record the correct invocation form (and the working directory it must be run from, if project-scoped) so future runs in that target repository don't rediscover it.
+
+### Isolated Worktree Readiness
+
+In an isolated Git worktree, a visible executable is not enough. Before claiming
+mutation readiness, run the mutation runner's dry run or equivalent initial test
+run from that worktree and confirm it resolves every runtime dependency (test
+environment, plugins, transforms, and project modules) from the worktree's own
+dependency layout. Do not borrow a binary or `NODE_PATH` from another checkout
+and treat a resulting partial run as valid evidence. If dependency resolution
+fails, report `installed-needs-config` with the error as Missing Evidence and
+escalate; do not report a mutation score.
 
 ## Missing Tool Procedure
 
@@ -190,6 +208,7 @@ Prefer the repository's existing mutation tool if already configured. Otherwise 
 - Python: `mutmut` first, `cosmic-ray` when mutmut is not viable for the environment
 - C#: `Stryker.NET`
 - Go: `go-mutesting`
+- Java, Rust, and C/C++: reuse a configured project-native tool; otherwise report missing evidence and a setup path
 
 Tool selection is not complete until you also confirm whether the chosen tool is installed and runnable in the current environment.
 
@@ -199,7 +218,7 @@ Keep the main skill focused on tool choice, mutation scope, and quality gates.
 
 Read `references/mutation-config-examples.md` when you need:
 
-- platform-specific configuration examples for Stryker, mutmut, Stryker.NET, or go-mutesting
+- platform-specific configuration examples for Stryker, mutmut, Stryker.NET, and go-mutesting
 - minimal setup snippets for focused mutation runs
 - example commands for narrowing production and test scope
 
@@ -216,6 +235,10 @@ When the tool is missing, the output must include:
 
 When the tool is already present, explicitly say so and reuse the existing config instead of proposing a parallel setup.
 
+## Script Interface
+
+Use `scripts/focused-mutation-plan.mjs` with `--repoPath <target-repository>` when the target differs from the current directory. The script checks command readiness before it emits a runnable plan.
+
 ## Mutation Testing Background
 
 Read `references/mutation-testing-background.md` when you need:
@@ -226,21 +249,19 @@ Read `references/mutation-testing-background.md` when you need:
 
 ## Quality Gate
 
-Minimum gate:
-
-- mutation score >= 85%
+Minimum gate: the project mutation gate, or 85% when none is defined.
 
 Fail conditions:
 
-- mutation score < 85%
+- mutation score is below the applicable gate
 - surviving mutants with no triage
 - scope so broad that the result is not attributable to the newly added tests
-- no runnable mutation tool is available and no installation/configuration path was produced
+- no runnable mutation tool is available
 
 Warning conditions:
 
-- score >= 85% but equivalent mutants remain
-- score >= 85% but the scope had to widen because the platform could not support a tighter target
+- score meets the applicable gate but equivalent mutants remain
+- score meets the applicable gate but the scope had to widen because the platform could not support a tighter target
 
 ## Surviving Mutant Triage
 
@@ -264,24 +285,28 @@ Do not leave survivors unexplained.
 - Changed Tests: {test files or suites}
 - Selected Scope: {function-adjacent|file/module|package|flow}
 - Scope Rationale: {why this is the smallest safe scope}
+- Source Revision: {commit or unchanged-worktree identity}
+- Report Location: {path or tool output reference}
+- Eligible Mutants: {eligible total, attempted total, invalid count, exclusions, timeout status}
+- Scope Item Mutant Coverage: {per named scope item — `covered` with an example mutant id, or `no-eligible-mutants` with the reason, e.g. its only mutations were type-invalid and excluded}
+- Unmeasured Scope Items: {list, or none — per item state the cause: `tests-do-not-reach` (Missing Evidence, needs a test) or `tool-cannot-mutate` (discharge via fault injection, naming the statement perturbed and the test that failed)}
+- Mutation Score: {killed}/{eligible} = {score}% vs gate {gate}% -> {PASS | FAIL | MISSING-EVIDENCE}
+- Gate Adjudication: {exact evaluate-mutation-report.mjs command + its exit code}
 - Rejected Narrower Scope: {why it was not sufficient, if applicable}
 - Test Selection Strategy: {specific tests/suites to execute}
 - Config Shape: {platform-specific keys/flags that must be set}
 - Setup Actions: {install/config/verification steps, or reused existing setup}
-- Command: {mutation command}
-- Quality Gate: mutation score >= 85%
-- Result: {PASS|PASS_WITH_WARNINGS|FAIL}
+- Command: {exact mutation command}
+- Quality Gate: {project gate or default 85%}
 - Surviving Mutants: {triage summary}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {test-validate-characterization-quality | human | self}
 ```
-
-## Success Criteria
-
-- Mutation testing runs only where the new tests add protection.
-- Tool choice matches the platform and existing repo setup.
-- Tool readiness is verified before mutation execution is claimed.
-- Missing tools lead to explicit installation and minimal configuration guidance.
-- Configuration is narrow enough to stay fast and broad enough to stay meaningful.
-- The result is evaluated against the 85% minimum gate with explicit survivor triage.
 
 ## Troubleshooting
 

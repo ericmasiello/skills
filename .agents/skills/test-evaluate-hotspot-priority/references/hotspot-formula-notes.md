@@ -3,7 +3,7 @@
 ## Why this replaces "the agent computes it in its head"
 
 The `coverage-auditor` agent originally documented `hotspot = change_frequency × complexity × (1 −
-line_coverage)` as a ranking heuristic, sourcing `change_frequency` from the `nw-hotspot` skill and
+line_coverage)` as a ranking heuristic, sourcing `change_frequency` from external history analysis and
 leaving the multiplication itself as an instruction for the LLM to carry out manually when building
 the ranking table. That is not reproducible: two runs (or two models) could compute slightly
 different numbers from the same inputs, and there was no bundled script anyone could point at.
@@ -120,6 +120,5 @@ invisible despite a real, untested conditional branch.
   itself, not in this ranking formula.
 - Supplying `--branchCoverages` is a caller responsibility, not automatic — this skill has no way to
   detect "you have branch coverage data but didn't pass it," so a caller (typically
-  `coverage-auditor`) must remember to always pass it through when available. (Fixed 2026 in
-  response to a real cycle-7 finding: see `hotspotScriptLineCoverageBlindSpot` in that cycle's
-  `backlog.json` for the original workaround this parameter replaces.)
+   `coverage-auditor`) must remember to always pass it through when available. This parameter was
+   added after benchmark validation exposed a line-only ranking blind spot.

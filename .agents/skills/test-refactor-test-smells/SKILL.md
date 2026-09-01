@@ -4,12 +4,19 @@ description: Step-by-step refactoring guidance for fixing test quality issues. U
 metadata:
   category: 'Test Refactoring'
   tags: ['refactoring', 'test-smells', 'test-quality', 'testing-theater']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Test Smell Refactoring Specialist
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -53,10 +60,8 @@ If prerequisites are missing, stop and request them.
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ## Severity-Driven Refactoring Index
 
@@ -158,9 +163,12 @@ Use `references/smell-refactoring-catalog.md` as canonical remediation guidance.
    - MEDIUM and LOW last
 
 3. **Refactor One Smell Cluster**
-   - Pick one smell in one file or tightly related file set
-   - Apply the smallest behavior-preserving test refactor
-   - Keep production code unchanged unless absolutely required for test compilation
+    - Pick one smell in one file or tightly related file set
+    - Apply the smallest behavior-preserving test refactor
+    - Keep production code unchanged unless absolutely required for test compilation
+    - For every retained or renamed test, assert each behavior claimed by its
+      name. If a claimed behavior cannot be observed in that test, split or
+      rename it; do not leave a misleading name as residual Testing Theater.
 
 4. **Verify Immediately**
    - Run the narrowest relevant tests
@@ -171,8 +179,11 @@ Use `references/smell-refactoring-catalog.md` as canonical remediation guidance.
    - Mark unresolved smells with explicit rationale
 
 6. **Validate Strength**
-   - Run focused mutation via `test-evaluate-focused-mutation`
-   - If kill rate regresses, tighten assertions before moving on
+    - Run focused mutation via `test-evaluate-focused-mutation`
+    - If kill rate regresses, tighten assertions before moving on
+    - Re-run `test-analyze-test-smells` on the changed tests. Confirm the
+      selected smell cluster is gone and record every remaining or newly
+      detected smell explicitly.
 
 ## Safety Rules
 
@@ -214,15 +225,24 @@ Use `references/smell-refactoring-catalog.md` as canonical remediation guidance.
 - Blocker Smells: {count}
 - Critical Smells: {count}
 - Total Smells Remaining: {count}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one downstream skill}
 ```
 
 ## Success Criteria
 
-- All Blocker smells eliminated
-- All Critical smells eliminated
+- The selected smell cluster is eliminated, confirmed by a post-refactor
+  `test-analyze-test-smells` run.
+- Any remaining Blocker or Critical smells outside the selected cluster are
+  listed in `Remaining Work`; they do not invalidate a completed small batch.
 - Tests pass after refactoring
 - Mutation score maintained or improved
-- No new smells introduced
+- No new Blocker or Critical smells introduced in the changed tests
 
 ## Related Skills
 

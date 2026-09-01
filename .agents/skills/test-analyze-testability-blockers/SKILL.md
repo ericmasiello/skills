@@ -4,24 +4,29 @@ description: Detect what makes legacy code untestable using the 11-smell taxonom
 metadata:
   category: 'Testability Analysis'
   tags: ['testability', 'blockers', 'prioritization', 'legacy-code', 'analysis', 'test-smells']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 4
   status: experimental
 ---
 
 # Stage 1 Testability Blocker Analyzer
 
 Detect the legacy code smells that block tests, then rank where to invest first.
-This skill is **Stage 1** legacy analysis. It combines taxonomy-based blocker detection with cross-component prioritization so a single pass produces both _what blocks testing_ and _what to fix first_.
+This skill is **Stage 1** legacy analysis. It combines taxonomy-based blocker detection with cross-component prioritization so a single pass produces both _what blocks testing_ and _what to fix first_. It is not a general code-quality review — see "Scope Guardrail" below.
 
-This skill is not a general code-quality review.
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Mission
 
 1. **Detect blockers**: Identify only the legacy code smells that make code untestable, using a fixed 11-smell taxonomy, with concrete evidence per finding.
 2. **Prioritize**: When multiple targets exist, rank them by business value, change frequency, and testability effort, separating seam work from direct test-writing quick wins.
 
-**Core Principle**: Before tests can be written, the code must be made testable. Legacy code smells are blockers to testing, not just indicators of poor design. Tests can only be written after seams are applied, so blocker evidence drives the priority order.
+**Core Principle**: Before tests can be written, the code must be testable. Legacy code smells are blockers to testing, not just indicators of poor design. When blockers exist, tests can only be written after seams are applied; directly constructible, controllable, and observable code needs no seam.
 
 ## Scope Guardrail
 
@@ -71,10 +76,8 @@ If prerequisites are missing, request them before proceeding.
 
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one downstream owner skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`, `Next Owner`).
 
 ---
 
@@ -131,6 +134,15 @@ If both of these are true for the same target behavior:
 
 report **1.1 Long Method in Difficult Class** as the primary difficult-class finding before secondary blockers.
 
+## Mandatory Target Enumeration
+
+Before analysis, list every class/file within the given scope by name (not just the
+ones that already look interesting). Assess each one individually against all 11
+smells. A class with no blockers found must still appear in the report, marked
+`No blocker smells detected` with a one-line reason — never omit a class from the
+report, and never let a summary-only section (e.g. "Quick Wins") substitute for
+individually assessing it.
+
 ## Mandatory Coverage Gate
 
 Before finalizing, explicitly classify all four of these as `Detected` or `Considered-Not-Found` with evidence:
@@ -153,6 +165,9 @@ Do not submit a final report that skips any of those four classifications.
 - 1.1 inference guard: do not infer **Long Method in Difficult Class** for one-line delegators, thin wrappers, or short orchestration methods just because the class is difficult to instantiate.
 - 1.1 confirmation rule: loops, nested branches, or business-rule accumulation directly shown in the target method are enough to keep **1.1 Long Method in Difficult Class** primary.
 - 3.1 vs 3.2: when an external or framework-owned parameter cannot be instantiated in tests, classify at least **Difficult Parameter**; if the method only reads primitive-accessible fields and the logic could be expressed with primitives, prefer **Difficult Parameter with Primitive Access**.
+- 2.2 substitutability rule: determinism is a 5.1 exemption, not a 2.2 exemption. A hardcoded data set (lookup table, price list, obstacle grid) is **2.2** whenever a test cannot supply a *different* set through a seam — regardless of how predictable today's values are.
+- 2.1 substitutability rule: the test is whether a fake/mock/spy can be injected at the seam, not whether today's hardcoded collaborator is itself simple or well-behaved. "It's easy to use as-is" is not a 2.1 exemption.
+- 6.1 secondary-concern rule: "unrelated" means a different *responsibility* than the class's core purpose, not a different call path — a method reachable from the workflow under test can still be **6.1** (e.g. logging/notification mixed into a domain method).
 
 ## Self-Validation Rules
 
@@ -175,19 +190,8 @@ Use Part B when multiple candidate targets exist and you need a ranked execution
 
 ## Gap Analysis Process
 
-### Step 1: Inventory Existing Tests
-
-Catalog what tests already exist and what behaviors they currently cover.
-
-### Step 2: Map Code To Test Coverage
-
-For each production file, identify:
-
-- **Tested paths**: Which behaviors have tests?
-- **Untested paths**: Which behaviors lack tests?
-- **Partially tested**: Which have incomplete coverage?
-
-### Step 3: Analyze Why Code Is Untested
+For each candidate, inventory existing tests and coverage (tested / untested /
+partially-tested paths), then classify why any gap is untested:
 
 | Reason                | Description                                 | Action Required                       |
 | --------------------- | ------------------------------------------- | ------------------------------------- |
@@ -196,7 +200,7 @@ For each production file, identify:
 | **Low Priority**      | Testable but not worth immediate investment | Document the decision                 |
 | **Dead Code**         | Never executed or obsolete                  | Consider removal                      |
 
-### Step 4: Calculate Priority
+### Calculate Priority
 
 **Priority Formula**:
 
@@ -227,49 +231,19 @@ When multiple seams are needed, order by:
 2. **Lowest risk** — Simple refactorings before complex
 3. **Dependency chain** — Some seams enable others
 
-This skill owns portfolio-level ordering across components or targets. Canonical seam-pattern selection for a specific blocker belongs to `test-plan-seam-refactoring`.
+This is portfolio-level ordering only; see "Seam Planning Handoff" below for the
+canonical-selection boundary with `test-plan-seam-refactoring`.
 
 For direct test additions where no seams are needed, add tests outside-in from widest behavioral net to narrowest: **Acceptance → Unit → Integration** (Contract for the HTTP transport layer when the app is HTTP-only).
-
-## Testability Assessment Checklist
-
-### For Each Untested Component
-
-**Instantiation Check**:
-
-- [ ] Can the class be instantiated in isolation?
-- [ ] Are constructor dependencies injectable?
-- [ ] Are there hidden dependencies (singletons, statics)?
-
-**Method Check**:
-
-- [ ] Can methods be called with test data?
-- [ ] Are there hardcoded values preventing testing?
-- [ ] Are there side effects that can't be observed?
-
-**Dependency Check**:
-
-- [ ] Are external dependencies mockable/fakeable?
-- [ ] Are there global state dependencies?
-- [ ] Are parameter types constructable in tests?
-
-**Determinism Check**:
-
-- [ ] Is output deterministic for same input?
-- [ ] Are there time dependencies?
-- [ ] Are there random/UUID dependencies?
 
 ---
 
 ## Seam Planning Handoff
 
-After identifying and ranking blockers, hand off to `test-plan-seam-refactoring` for the canonical seam choice and full pattern comparison.
-
-This skill may name the most likely next seam direction in plain language, but it does not own the authoritative smell-to-pattern matrix. The handoff preserves one source of truth for:
-
-- primary vs secondary seam choice
-- comparison across all 18 refactoring patterns
-- detailed behavior-preserving implementation guidance
+After identifying and ranking blockers, hand off to `test-plan-seam-refactoring` for
+the canonical seam choice and full pattern comparison (primary vs secondary choice,
+comparison across all 18 patterns, implementation guidance) — this skill may name a
+likely direction in plain language but does not own that matrix.
 
 If standard seam planning is unsafe or stalled, hand off to `test-analyze-fallback-strategies` instead.
 
@@ -302,10 +276,10 @@ Return both a blocker report and (when multiple targets exist) a prioritized gap
 
 | Smell                                  | Status                           | Evidence   |
 | -------------------------------------- | -------------------------------- | ---------- |
-| 4.2 Local Variable → Global            | {Detected\|Considered-Not-Found} | {line/ref} |
-| 4.3 Method Using Globals as Parameters | {Detected\|Considered-Not-Found} | {line/ref} |
-| 5.1 Difficult Static Method            | {Detected\|Considered-Not-Found} | {line/ref} |
-| 6.1 Difficult Unrelated Method         | {Detected\|Considered-Not-Found} | {line/ref} |
+| 4.2 Local Variable → Global            | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
+| 4.3 Method Using Globals as Parameters | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
+| 5.1 Difficult Static Method            | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
+| 6.1 Difficult Unrelated Method         | {Detected\|Considered-Not-Found\|N/A} | {line/ref} |
 
 ### Smells Detected
 
@@ -352,15 +326,14 @@ Return both a blocker report and (when multiple targets exist) a prioritized gap
 2. If standard seam planning is unsafe or stalled, use `test-analyze-fallback-strategies`.
 3. Write tests for Quick Wins using outside-in Acceptance → Unit → Integration order.
 4. Re-assess coverage.
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {test-plan-seam-refactoring | test-generate-acceptance-tests | human | self}
 ```
-
-## Success Criteria
-
-- The blocker report uses only the approved taxonomy.
-- Every finding names a concrete test blocker.
-- The required coverage gate is complete.
-- When multiple targets exist, a defensible priority order is produced.
-- Recommendations point to seam refactorings that unblock testing.
 
 ## Related Skills
 

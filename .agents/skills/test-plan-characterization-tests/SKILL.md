@@ -4,12 +4,19 @@ description: Plan characterization tests for legacy code to pin existing behavio
 metadata:
   category: 'Test Planning'
   tags: ['test-planning', 'characterization', 'legacy-code', 'test-strategy']
-  author: TBD
-  revision: 1
+  author: DOM-0080
+  revision: 3
   status: experimental
 ---
 
 # Stage 3 Legacy Characterization Planning Primer
+
+## Shared Policy
+
+Gate thresholds, verdict mapping, evidence requirements, and the retry budget are
+defined once in [`../test-quality-policy.md`](../test-quality-policy.md). Do not
+restate a threshold or a verdict mapping here — link there instead, so a policy
+change takes effect in one edit.
 
 ## Purpose
 
@@ -21,7 +28,9 @@ These characterization techniques apply to **all service types**. Service classi
 
 ## Stage Focus
 
-Use this skill when code already exists, Stage 2 seams are verified, and you need a safe regression baseline before changing behavior.
+Use this skill when code already exists, Stage 2 readiness is confirmed, and you need a safe regression baseline before changing behavior.
+Readiness means either seams are verified **or** the target is already directly
+constructible, controllable, and observable in tests, so no seam is required.
 Seam analysis and seam choice are upstream concerns; if seams are still being debated, return to `test-plan-seam-refactoring` before planning Stage 3 tests.
 
 Characterization is not a separate test taxonomy: still plan tests as acceptance, unit, integration, or contract tests based on boundary and I/O.
@@ -30,7 +39,7 @@ Characterization is not a separate test taxonomy: still plan tests as acceptance
 
 Use this skill when:
 
-- seams are verified and you need a Stage 3 characterization strategy
+- seams are verified, or no seam is required, and you need a Stage 3 characterization strategy
 - you must choose technique/scope/order before implementation
 - you need one consolidated plan and handoff to implementation skills
 
@@ -38,17 +47,20 @@ Use this skill when:
 
 Before producing a plan, require:
 
-1. Stage 2 seam readiness confirmed
+1. Stage 2 readiness confirmed: seams verified **or** no seam required because
+   the target is directly constructible, controllable, and observable
 2. target behavior and test scope identified
 
 If prerequisites are missing, stop and request them before planning.
 
+Before choosing a strategy, check the target repo's existing test suite structure and
+conventions so the plan hands off to implementation skills with a style they can match.
+
 ## Required Decision Output
 
-- `Result`: `COMPLETE` | `COMPLETE_WITH_WARNINGS` | `BLOCKED`
-- `Missing Evidence`: explicit list (empty if none)
-- `Blocking Issues`: explicit list (empty if none)
-- `Next Owner`: one implementation skill
+Report the shared fields defined in `test-skills-decision-contract.md`
+(`Result`, `Missing Evidence`, `Blocking Issues`). `Next Owner` here is one
+implementation skill.
 
 ## Ownership Boundary
 
@@ -92,7 +104,7 @@ Use these focused skills for the detailed rules:
 
 ## Core Rules
 
-- Never plan characterization execution before seams are verified.
+- Never plan characterization execution before Stage 2 readiness is confirmed: seams verified, or no seam required for directly constructible, controllable, and observable code.
 - Capture **actual behavior**, not desired behavior.
 - Let failing observations reveal actual behavior before locking assertions.
 - Use Golden Master for broad or complex outputs; use unit characterization for explicit outputs and boundary side effects.
@@ -145,7 +157,7 @@ Avoid these anti-patterns:
 ## Legacy Test Plan: {Target}
 
 - Stage: 3 - Characterization after verified seams
-- Seams Verified: {list of seams or blocker}
+- Seams Verified: {list of seams | No seam required: direct construction/control/observation | blocker}
 - Characterization Strategy: {Golden Master | Unit Characterization | Mixed}
 - Non-Determinism Controls: {time/random/id/external-call handling}
 - Coverage Plan: {test slice | selected runner | selected coverage tool | environment readiness | config shape}
@@ -157,6 +169,13 @@ Avoid these anti-patterns:
 - Rejected Alternatives: {what was avoided and why}
 - Anti-Patterns to Avoid: {inline literal sprawl | duplicate arrange | fixture sprawl | guessed expectations}
 - Next Test Slice: {acceptance | unit | integration | contract}
+
+## Decision Contract
+
+- Result: {COMPLETE | COMPLETE_WITH_WARNINGS | BLOCKED}
+- Missing Evidence: {list or none}
+- Blocking Issues: {list or none}
+- Next Owner: {one implementation skill}
 ```
 
 ## Related Skills

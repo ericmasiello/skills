@@ -10,14 +10,23 @@ Mutation testing introduces artificial faults and checks whether the test suite 
 | ----------- | ---------------------------- | --------------------------------------- |
 | < 60%       | Weak suite, significant gaps | Major test improvements required        |
 | 60-80%      | Moderate quality, some gaps  | Add tests for critical paths            |
-| 80-85%      | Strong quality, minor gaps   | Address remaining survivors selectively |
-| > 85%       | Excellent quality            | Maintain this level for new code        |
+| 80-<85%     | Strong quality, minor gaps   | Below the gate; classify every survivor and close the test gaps |
+| >=85%       | Excellent quality            | Maintain this level for new code        |
+
+The table above describes industry score bands. It is not a gate. The gate is
+defined once, in [`../../test-quality-policy.md`](../../test-quality-policy.md),
+and only an explicit project policy may set a value other than the documented
+default. This reference cannot lower it.
 
 Default interpretation for this skill:
 
-- `85%` is the minimum focused-mutation gate for legacy characterization work
-- `75%` to `80%` may still be acceptable in earlier TDD-oriented work
-- not all survivors indicate bad tests because equivalent mutants exist
+- `85%` is the minimum focused-mutation gate unless a project policy sets another
+- a score below the gate is a FAIL, whatever the band above calls it
+- every survivor must be classified as `test gap`, `equivalent mutant`, or
+  `deferred`; equivalent mutants exist, but "probably equivalent" is not a
+  classification
+- the gate is adjudicated by
+  `scripts/evaluate-mutation-report.mjs`, not by reading this table
 
 ## Common Mutation Operators
 
