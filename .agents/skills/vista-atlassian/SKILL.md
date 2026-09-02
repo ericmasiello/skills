@@ -42,8 +42,8 @@ Use `twg help describe <path>` before any command whose exact arguments, choices
 | Jira       | View one work item                  | `twg jira workitem get`                      |
 | Jira       | Create work item                    | `twg jira workitem create`                   |
 | Jira       | Edit work item                      | `twg jira workitem update`                   |
-| Jira       | List valid transitions              | `twg jira workitem transitions query`        |
-| Jira       | Transition work item                | `twg jira workitem transition`               |
+| Jira       | List valid transitions              | `twg jira workitem transitions query --id <key>` |
+| Jira       | Transition work item                | `twg jira workitem update --id <key> --status "<Status name>"` (the tool's own `transitions query` output points here; `twg jira workitem transition --id <key> --transition-id <id\|name>` also works) |
 | Jira       | Comment                             | `twg jira workitem comment create/query/update/delete` |
 | Jira       | Link two work items                 | `twg jira workitem link workitem`            |
 | Jira       | Board / sprint                      | `twg jira board query/create/get`, `twg jira sprint create/start/complete/workitems query` |
@@ -70,6 +70,16 @@ Only needed if `twg` isn't installed/authenticated. The Rovo MCP server (`io.vis
    - **Search** → ask the user for issue keys / page IDs / URLs directly
    - **Page/issue updates** → draft the content and give them the edit link for manual paste
    - **Comments** → provide text for the user to post manually
+
+## Verified live (2026-09-02)
+
+Installed, authenticated (`twg doctor` → `vistaprint.atlassian.net`, connectivity ok), and ran the following against real data before this skill shipped:
+- `twg access`, `twg skills install --yes --detect-agents` (installs `twg`'s own official skill bundle)
+- `twg jira workitem query --jql "assignee = currentUser() ORDER BY updated DESC" --limit 3` — real issues returned
+- `twg confluence search query --cql "type=page AND creator = currentUser() ORDER BY created DESC" --limit 3` — real pages returned
+- `twg jira workitem get <key>`, `twg jira workitem transitions query --id <key>` — the latter's own output pointed at `workitem update --status`, which is why that row above prefers it over `workitem transition`
+
+Not yet exercised live: `create`/`update`/`comment create`/`link` (write operations) and all of Confluence's `content create/update`.
 
 ## Note on `twg`'s own official skill
 
