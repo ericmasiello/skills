@@ -35,7 +35,7 @@
     }
   },
   "browser_automation_engine": {
-    "provider": "playwright-cli"
+    "provider": "playwright"
   },
   "categories": {
     "visual-engineering": {
