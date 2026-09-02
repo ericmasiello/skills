@@ -107,6 +107,7 @@ Shared gate/evidence/retry/verdict policy for the whole pipeline lives in [`test
 - **[diagnosing-bugs](./skills/diagnosing-bugs/SKILL.md)**: Disciplined diagnosis loop for hard bugs and performance regressions.
 - **[node-version-mismatch](./skills/node-version-mismatch/SKILL.md)**: Fix a Node engine/version error (`EBADDEVENGINES`, etc.) by running `nvm install` against the repo's `.nvmrc`, instead of guessing or editing the requirement.
 - **[glab-auth-error](./skills/glab-auth-error/SKILL.md)**: Fix a `glab` 401/"no token found" error by running `glab auth login`/`glab auth status`, instead of hunting for an alternate auth path.
+- **[playwright](./skills/playwright/SKILL.md)**: Shadows the builtin browser-automation skill — model-invoked automatically for any browser task, forcing `playwright-cli` (headed by default) over `openchamber_web`. Requires `browser_automation_engine.provider: "playwright"` in `opencode/oh-my-openagent.json` — see `../docs/adr/0007-*.md` for why that pairing matters.
 - **[research](./skills/research/SKILL.md)**: Investigate a question against high-trust primary sources and capture findings as a Markdown file, run as a background agent.
 - **[code-comments](./skills/code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function.
 - **[wizard](./skills/wizard/SKILL.md)**: Generate an interactive bash wizard for steps only a human can perform (credentials, dashboards, provisioning).
