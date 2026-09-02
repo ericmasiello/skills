@@ -6,3 +6,9 @@ node_modules
 
 # used for /address-pr-feedback skill
 .scratch
+
+# vendor-installed by `twg skills install` (Atlassian's own Teamwork Graph
+# CLI skill bundle) — self-updating via `twg update`/`twg skills install`,
+# not this repo's content. See docs/adr/0008-*.md.
+.agents/skills/twg/
+.agents/skills/twg-*/
