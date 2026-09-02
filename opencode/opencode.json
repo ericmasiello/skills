@@ -16,8 +16,11 @@
     },
     "io.vista/cortex-mcp": {
       "type": "remote",
-      "enabled": false,
-      "url": "https://mcp.cortex.io/mcp"
+      "enabled": true,
+      "url": "https://mcp.cortex.io/mcp",
+      "headers": {
+        "Authorization": "Bearer {env:CORTEX_API_TOKEN}"
+      }
     },
     "io.vista/figma-mcp": {
       "type": "remote",
