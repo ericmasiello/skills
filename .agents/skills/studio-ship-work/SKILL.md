@@ -44,67 +44,22 @@ git push -u origin HEAD
 
 ### 4. Merge request
 
-Check if an MR already exists for this branch:
+Invoke the `write-pr-description` skill to compose and apply the MR description. Pass it:
+
+- The issue(s) resolved in step 1, for its issue-closing footer.
+- This steering note for its reviewer-test-guidance section: "Preview deployments cover the Vistaprint DEX, VCS DEX, and Design Services DEX. Vistaprint DEX is the default — don't name it explicitly unless the change also touches a non-default DEX (VCS DEX, Design Services DEX), in which case name that one."
+
+Only skip invoking it if the user explicitly says not to create an MR (e.g., "don't create an MR", "no MR") and none already exists.
+
+Once `write-pr-description` reports the MR was created or updated, attach this repo's labels — it does not manage labels itself:
 
 ```bash
-glab mr view 2>&1
+glab mr update --label "<workstream::* label from step 1>" --label "status::awaiting-review"
 ```
 
-#### 4a. No existing MR
+> **If creating**, pass `--source-branch "$(git branch --show-current)"` explicitly and avoid `--related-issue`/`--copy-issue-labels` — `--related-issue` causes glab to auto-generate a source branch name from the issue title instead of using the current branch, resulting in an MR with 0 commits. Link the issue via the `Closes #<iid>` footer in the body instead.
 
-Create an MR by default. Only skip if the user explicitly says not to (e.g., "don't create an MR", "no MR").
-
-Create the MR using the repo's MR template (`.gitlab/merge_request_templates/Default.md`). Fill in the template sections following the ["How to test this MR" guidance](#how-to-test-this-mr-section) and the ["Architecture section" guidance](#architecture-section) below.
-
-Append a **Closes** section at the bottom listing every issue this MR addresses:
-
-```
-## Issues
-
-Closes #<iid1>
-Closes #<iid2>
-```
-
-Run the finished description through the `/unslop` skill before creating the MR.
-
-Create with:
-
-```bash
-BRANCH=$(git branch --show-current)
-BODY_FILE=$(mktemp) && cat > "$BODY_FILE" <<'__MR_BODY__'
-<filled template content with Closes references>
-__MR_BODY__
-glab mr create --title "<derive from commit subject(s) — if single commit use its subject; if multiple summarize the change in conventional commit format; may also use the issue title>" \
-  --source-branch "$BRANCH" \
-  --description "$(cat "$BODY_FILE")" \
-  --label "<workstream::* label from step 1>" \
-  --label "status::awaiting-review"
-```
-
-> **⚠️ Always pass `--source-branch` explicitly.** Without it, flags like `--related-issue` cause glab to auto-generate a source branch name from the issue title instead of using the current branch — resulting in an MR with 0 commits.
->
-> **Do NOT use `--related-issue` or `--copy-issue-labels`** — `--related-issue` triggers the branch-name override bug. Instead, copy the issue's labels manually via `--label` flags, and link the issue via `Closes #<iid>` in the MR description body.
-
-If **no**, skip to step 5.
-
-#### 4b. Existing MR — update description
-
-If an MR already exists and new commits were just pushed, update the MR description to reflect the latest changes:
-
-1. Read the current MR description: `glab mr view --output json`
-2. Update all sections to cover all commits (not just the latest push)
-3. Rewrite the "How to test this MR" section following the ["How to test this MR" guidance](#how-to-test-this-mr-section) below
-4. Add or update the `## Architecture` section following the ["Architecture section" guidance](#architecture-section) below
-5. Ensure every closed issue is listed in the **Closes** section — if this branch now addresses additional issues beyond the original, add them
-6. Run the updated description through the `/unslop` skill
-7. Apply the update:
-
-```bash
-BODY_FILE=$(mktemp) && cat > "$BODY_FILE" <<'__MR_BODY__'
-<updated description>
-__MR_BODY__
-glab mr update --description "$(cat "$BODY_FILE")"
-```
+Reviewer test guidance and the `## Architecture` diagram convention live in `write-pr-description`'s writing-craft reference now — the steering note above is the only Vistaprint-specific residue.
 
 ### 5. Update issue status
 
@@ -131,105 +86,6 @@ Output:
 - Push result (branch + remote)
 - MR URL (if created or updated) and which issues it closes
 - Issue status update confirmation for each issue
-
-## "How to test this MR" section
-
-This section is for **human reviewers doing manual validation** against the MR's deployment previews. It is NOT for CI — automated tests, linting, and type-checking are already handled by the pipeline.
-
-**NEVER include** instructions like "run `pnpm test`", "run `pnpm lint`", "execute the test suite", or any CLI commands a reviewer would run locally. CI does all of that.
-
-**DO include** specific things a human reviewer should look for in the deployed environments:
-
-- **Application changes** → Tell reviewers what to verify in the deployed DEX. The MR will create preview deployments for the Vistaprint DEX, VCS DEX, and Design Services DEX.
-  - If the change affects the **Vistaprint DEX** (the most common case), no need to call it out by name — just describe what to look for (e.g., "Open the color picker and verify the new swatch renders correctly").
-  - If the change affects a **non-default DEX** (VCS DEX, Design Services DEX), explicitly name which DEX the reviewer should check (e.g., "In the **VCS DEX**, verify the template selector shows the updated categories").
-- **Docs changes** → Tell reviewers to check the docs deployment and what content to verify (e.g., "Review the updated Props table on the Button docs page to confirm the new `variant` prop is documented").
-- **Mixed changes** → Cover both: application behavior in the relevant DEX(es) AND docs content.
-
-Keep instructions concrete and actionable. Focus on *what changed visually or behaviorally* and *where to look*.
-
-## Architecture section
-
-Include a `## Architecture` section in the MR description when the change involves **structural modifications** to code: new providers, context boundaries, hook extractions, data flow changes, API/interface changes, module restructuring, or significant call-site migrations.
-
-**Skip it** for trivial changes: pure bug fixes, isolated prop/style tweaks, test-only changes, or renames where the before/after is self-evident from the diff.
-
-### Diagram format
-
-Use **text-based code and JSX diagrams** — no Mermaid, no ASCII boxes. Each diagram is a fenced code block annotated with file paths.
-
-**Annotate every block with its file path as a comment:**
-
-```tsx
-// Before — apps/studio/src/path/to/File.tsx
-<OldStructure />
-
-// After — apps/studio/src/path/to/File.tsx
-<NewStructure />
-```
-
-For new files, use `// NEW`:
-
-```tsx
-// NEW — apps/studio/src/path/to/NewFile.tsx
-export function NewProvider({ children }: PropsWithChildren) { ... }
-```
-
-For diagrams spanning multiple files (e.g., a provider tree), add `// ComponentName.tsx (simplified)` if it helps orient the reader — but it's not required.
-
-### Before/after rules
-
-- **Show before/after** when structure or behavior changes.
-- **Show after-only** (`// NEW`) when something is purely additive — new file, new export, new feature with no prior equivalent.
-- **Omit before** for bug fixes (the before state was broken), pure renames (obvious from the diff), or anything where the before adds noise without insight.
-
-### What to diagram
-
-Cover two levels, in order:
-
-1. **API / call-site level** — how consumers interact with the changed code (props, hook signatures, context shape, import paths). Ground the reviewer here first.
-2. **Internals level** — what changed inside the implementation (extracted hooks, new providers, restructured logic). Add this after the API-level diagram.
-
-Use multiple diagrams when the MR touches multiple distinct structural changes.
-
-### Example — new provider in the tree
-
-```tsx
-// Before — apps/studio/src/studioSix/defaultExperience/DefaultExperience.tsx
-<DesignEngineProvider>
-  <ErrorBoundaryWithSave>
-    ...feature tree...
-  </ErrorBoundaryWithSave>
-</DesignEngineProvider>
-
-// After — apps/studio/src/studioSix/defaultExperience/DefaultExperience.tsx
-<DesignEngineProvider>
-  <StudioSaveIntegrationProvider>  {/* NEW */}
-    <ErrorBoundaryWithSave>
-      ...feature tree...
-    </ErrorBoundaryWithSave>
-  </StudioSaveIntegrationProvider>
-</DesignEngineProvider>
-```
-
-### Example — API change (curried hook)
-
-```ts
-// Before — apps/studio/src/shared/features/Save/useSave.tsx
-const save = useSave({
-  allowAnonymousUser: true,
-  showSaveToast: false,
-  getDocumentForSave: useGetDocumentForSave(),
-  udsTenant, workTenant  // integration params mixed with call-site params
-})
-
-// After — apps/studio/src/shared/features/Save/useSave.tsx
-const { configureSave, getDocumentForSave } = useSaveFunctions()
-const save = configureSave({
-  allowAnonymousUser: true,
-  getDocumentForSave  // integration params now bound by the provider
-})
-```
 
 ## Label reference
 

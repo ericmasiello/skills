@@ -22,6 +22,7 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[wayfinder](./skills/wayfinder/SKILL.md)**: Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
 - **[implement](./skills/implement/SKILL.md)**: Implement a piece of work based on a spec or set of tickets.
 - **[split-mr](./skills/split-mr/SKILL.md)**: Decide whether a branch's diff should ship as a stack of small, single-concern MRs, a set of parallel ones, or stay as one — then build the chosen split.
+- **[write-pr-description](./skills/write-pr-description/SKILL.md)**: Compose or update a PR/MR title and description, honoring any repo-defined template — fires on creating a PR/MR, pushing to a branch that already has one open, or an explicit ask. Used by `studio-ship-work` as its description-composing step.
 - **[code-review](./skills/code-review/SKILL.md)**: Two-axis review (Standards + Spec) of the changes since a fixed point, run as parallel sub-agents.
 - **[address-pr-feedback](./skills/address-pr-feedback/SKILL.md)**: Triage PR/MR review comments one at a time, reply, resolve, implement changes, and close out threads.
 - **[triage](./skills/triage/SKILL.md)**: Move issues and external PRs through a state machine of triage roles, categorize, verify, and write agent-ready briefs.
@@ -143,7 +144,7 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 - **[studio-migrate-to-jira](./skills/studio-migrate-to-jira/SKILL.md)**: Migrate GitLab work items from the Studio project into Jira Workstreams/Tasks.
 - **[studio-rebase](./skills/studio-rebase/SKILL.md)**: Fetch and rebase onto a target branch, then resolve all merge conflicts.
 - **[studio-review-test-coverage](./skills/studio-review-test-coverage/SKILL.md)**: Open HTML coverage reports for Studio source files in the browser.
-- **[studio-ship-work](./skills/studio-ship-work/SKILL.md)**: Commit, push, optionally open a GitLab MR, and update the source issue's status labels.
+- **[studio-ship-work](./skills/studio-ship-work/SKILL.md)**: Commit, push, optionally open a GitLab MR (delegating the description to `write-pr-description`), and update the source issue's status labels.
 - **[studio-worktree-zed](./skills/studio-worktree-zed/SKILL.md)**: Create a git worktree from a GitLab issue and open it in Zed.
 - **[vista-atlassian](./skills/vista-atlassian/SKILL.md)**: Jira/Confluence via the `acli` CLI (Vistaprint-specific), with the Rovo MCP server as fallback.
 
