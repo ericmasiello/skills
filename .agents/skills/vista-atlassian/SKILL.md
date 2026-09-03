@@ -71,16 +71,6 @@ Only needed if `twg` isn't installed/authenticated. The Rovo MCP server (`io.vis
    - **Page/issue updates** → draft the content and give them the edit link for manual paste
    - **Comments** → provide text for the user to post manually
 
-## Verified live (2026-09-02)
-
-Installed, authenticated (`twg doctor` → `vistaprint.atlassian.net`, connectivity ok), and ran the following against real data before this skill shipped:
-- `twg access`, `twg skills install --yes --detect-agents` (installs `twg`'s own official skill bundle)
-- `twg jira workitem query --jql "assignee = currentUser() ORDER BY updated DESC" --limit 3` — real issues returned
-- `twg confluence search query --cql "type=page AND creator = currentUser() ORDER BY created DESC" --limit 3` — real pages returned
-- `twg jira workitem get <key>`, `twg jira workitem transitions query --id <key>` — the latter's own output pointed at `workitem update --status`, which is why that row above prefers it over `workitem transition`
-
-Not yet exercised live: `create`/`update`/`comment create`/`link` (write operations) and all of Confluence's `content create/update`.
-
 ## Note on `twg`'s own official skill
 
 `twg setup` installs Atlassian's own maintained skill bundle to `~/.agents/skills/twg*` (`twg-jira`, `twg-confluence`, `twg-context-discovery`, etc.) — that bundle is the authoritative, self-updating source for command discovery and Atlassian-wide workflows. This skill exists only to pin the Vistaprint-specific site/auth context above; it deliberately does not duplicate `twg`'s own command reference (see `docs/adr/0008-*.md` for why).
