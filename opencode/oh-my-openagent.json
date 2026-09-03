@@ -50,6 +50,9 @@
       "model": "cimpress-ai-gateway/gpt-5.6-luna",
       "variant": "high"
     },
+    "deep": {
+      "model": "cimpress-ai-gateway/gemini-3.5-flash"
+    },
     "quick": {
       "model": "cimpress-ai-gateway/eu.anthropic.claude-haiku-4-5-20251001-v1:0"
     },

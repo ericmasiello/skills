@@ -1,0 +1,13 @@
+name: Verify setup.sh symlinks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/verify-setup-symlinks.sh

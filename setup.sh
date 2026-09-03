@@ -11,6 +11,19 @@
 # directory already sitting at the destination is backed up (moved aside
 # with a timestamped suffix, never deleted) before the symlink is created —
 # see docs/adr/0005-*.md for why.
+#
+# ~/.agents and ~/.agents/skills are real directories, not whole-directory
+# symlinks — every entry inside each is symlinked individually. This lets
+# vendor CLIs (e.g. `twg skills install`) write their own new, untracked
+# entries directly into ~/.agents/skills/ without ever landing inside this
+# repo's git working tree — see docs/adr/0009-*.md for why.
+#
+# CI (.github/workflows/verify-symlinks.yml, via scripts/verify-setup-symlinks.sh)
+# runs this script against a scratch HOME and fails the build if the symlinks
+# it produces don't match .agents/'s actual contents — keep that in mind if
+# you change the linking logic below.
+
+shopt -s dotglob nullglob
 
 set -euo pipefail
 
@@ -61,7 +74,36 @@ link() {
   echo "linked:  $dest -> $src"
 }
 
-link "$REPO_DIR/.agents"                        "$HOME/.agents"
+# Ensure dest is a real directory (backing up and replacing a leftover
+# whole-directory symlink from before docs/adr/0009-*.md if one is found),
+# then symlink every entry of src into it individually via link(). Pass a
+# name in $3 to skip linking that one entry as a whole (used for skills/,
+# which link_dir_contents is called on separately, one level deeper).
+link_dir_contents() {
+  local src="$1" dest="$2" skip="${3:-}"
+
+  if [[ ! -d "$src" ]]; then
+    echo "SKIP:    $src does not exist — nothing to link into $dest"
+    return
+  fi
+
+  if [[ -L "$dest" ]]; then
+    backup_dest "$dest"
+  fi
+
+  mkdir -p "$dest"
+
+  local entry name
+  for entry in "$src"/*; do
+    name="$(basename "$entry")"
+    [[ -n "$skip" && "$name" == "$skip" ]] && continue
+    link "$entry" "$dest/$name"
+  done
+}
+
+link_dir_contents "$REPO_DIR/.agents" "$HOME/.agents" skills
+link_dir_contents "$REPO_DIR/.agents/skills" "$HOME/.agents/skills"
+
 link "$REPO_DIR/opencode/agents"                "$HOME/.config/opencode/agents"
 link "$REPO_DIR/opencode/commands"              "$HOME/.config/opencode/commands"
 link "$REPO_DIR/opencode/opencode.json"         "$HOME/.config/opencode/opencode.json"
