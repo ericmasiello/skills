@@ -1,111 +1,76 @@
 ---
 name: vista-atlassian
-description: Interact with Atlassian Jira and Confluence using the acli CLI as the primary tool, with Rovo MCP server fallback for operations acli cannot handle. Use when querying Jira issues, searching with JQL, viewing or editing Confluence pages, creating issues or pages, transitioning work items, adding comments, managing sprints or boards, or any Atlassian product interaction.
+description: Interact with Atlassian Jira and Confluence using the official `twg` (Teamwork Graph CLI) as the primary tool, with the Rovo MCP server as a fallback when `twg` is unavailable. Use when querying Jira issues, searching with JQL, viewing or editing Confluence pages, creating issues or pages, transitioning work items, adding comments, managing sprints or boards, or any Atlassian product interaction.
 ---
 
 # Atlassian (Jira + Confluence)
 
 ## Auth Context
 
-| Product    | Site                              | MCP Cloud ID                      |
-|------------|-----------------------------------|-----------------------------------|
-| Jira       | vistaprint.atlassian.net          | vistaprint.atlassian.net          |
-| Confluence | vistaprint.atlassian.net          | vistaprint.atlassian.net          |
+| Product    | Site                      |
+|------------|---------------------------|
+| Jira       | vistaprint.atlassian.net  |
+| Confluence | vistaprint.atlassian.net  |
+
+Run `twg doctor` if unsure which site/org the CLI is currently authenticated against; run `twg access` to see which products, sites, and orgs the current token can reach.
 
 ## Tool Routing
 
-**Use `acli` (primary)** — run via `bash` tool:
+**Use `twg` (primary)** — run via `bash` tool. `twg` is Atlassian's own agent-first CLI (`developer.atlassian.com/cloud/twg-cli/`), superseding `acli` for agent use: it standardizes command/output shape across products and covers everything this skill needs — Jira work items, boards, sprints, filters, and full Confluence CRUD + CQL search (the acli/MCP split this skill used before `twg` existed is gone; `twg` alone covers both).
 
-| Domain     | Operations                                                                                     |
-|------------|-----------------------------------------------------------------------------------------------|
-| Jira       | workitem: search/view/create/edit/transition/comment/link/assign/delete/archive/clone/attach   |
-|            | project: list/view/create/update/delete/archive                                                |
-|            | board: search/create/get/list-sprints/list-projects                                            |
-|            | sprint: create/view/update/delete/list-workitems                                               |
-|            | filter: list/search/get/update                                                                 |
-|            | field: create/update/delete                                                                    |
-| Confluence | page: view (by ID only)                                                                        |
-|            | blog: create/list/view                                                                         |
-|            | space: list/view/create/update/archive/restore                                                 |
+**Use Rovo MCP (fallback)** — `io.vista/atlassian-mcp` (remote server, disabled by default) — only if `twg` is not installed/authenticated in the current environment. See "MCP Fallback Protocol" below.
 
-**Use Rovo MCP (fallback)** — `io.vista/atlassian-rovo-mcp`:
+### Don't hardcode command syntax — discover it live
 
-| Domain     | Operations                                                        | MCP Tool                         |
-|------------|------------------------------------------------------------------|----------------------------------|
-| Confluence | Search pages (CQL)                                                | `searchConfluenceUsingCql`       |
-| Confluence | Create page                                                       | `createConfluencePage`           |
-| Confluence | Update/edit page                                                  | `updateConfluencePage`           |
-| Confluence | Get page with body content                                        | `getConfluencePage`              |
-| Confluence | Footer/inline comments                                            | `createConfluenceFooterComment`, `getConfluencePageFooterComments`, `createConfluenceInlineComment`, `getConfluencePageInlineComments` |
-| Confluence | Page descendants                                                  | `getConfluencePageDescendants`   |
-| Confluence | Full-text search (Rovo)                                           | `search`                         |
-| Jira       | Add/update worklog                                                | `addWorklogToJiraIssue`          |
-| Jira       | Remote issue links                                                | `getJiraIssueRemoteIssueLinks`   |
-| Jira       | Lookup user by name                                               | `lookupJiraAccountId`            |
+`twg`'s command surface is large and evolves independently of this skill. Instead of memorizing flags here, discover them at call time, exactly as Atlassian's own docs instruct agents to:
+
+```bash
+twg help                                   # top-level namespaces
+twg help jira workitem                     # commands in a namespace
+twg help describe "jira workitem create"   # exact args/flags/examples for one command
+twg help discover-skills "sprint prioritization" --skill twg-jira   # find relevant reference docs
+```
+
+Use `twg help describe <path>` before any command whose exact arguments, choices, or defaults matter — don't guess flags from memory or from an older skill revision.
+
+### Verified command surface (names only — confirm flags via `twg help describe`)
+
+| Domain     | Operation                          | Command                                    |
+|------------|-------------------------------------|---------------------------------------------|
+| Jira       | JQL search                          | `twg jira workitem query`                   |
+| Jira       | Fuzzy text search                   | `twg jira workitem search`                   |
+| Jira       | View one work item                  | `twg jira workitem get`                      |
+| Jira       | Create work item                    | `twg jira workitem create`                   |
+| Jira       | Edit work item                      | `twg jira workitem update`                   |
+| Jira       | List valid transitions              | `twg jira workitem transitions query --id <key>` |
+| Jira       | Transition work item                | `twg jira workitem update --id <key> --status "<Status name>"` (the tool's own `transitions query` output points here; `twg jira workitem transition --id <key> --transition-id <id\|name>` also works) |
+| Jira       | Comment                             | `twg jira workitem comment create/query/update/delete` |
+| Jira       | Link two work items                 | `twg jira workitem link workitem`            |
+| Jira       | Board / sprint                      | `twg jira board query/create/get`, `twg jira sprint create/start/complete/workitems query` |
+| Jira       | Project admin ("space" in `twg`'s naming = Jira project) | `twg jira space create/get/query/update` |
+| Jira       | JSM request (not a plain work item) | `twg jsm request create` — use this instead of `jira workitem create` when the target project is a service desk |
+| Confluence | CQL search                          | `twg confluence search query`                |
+| Confluence | Natural-text search                 | `twg confluence search text`                 |
+| Confluence | Read a page/blogpost/whiteboard     | `twg confluence content get`                 |
+| Confluence | Create page/blog/whiteboard/etc.    | `twg confluence content create`              |
+| Confluence | Update content                      | `twg confluence content update` (also: `move`, `copy`, `archive`, `delete-draft`) |
+| Confluence | Comments                            | `twg confluence content comments create/query/reply/resolve` |
+| Confluence | Attachments                         | `twg confluence content attachments upload/list/download` |
+| Confluence | Spaces                              | `twg confluence space *` |
+
+All of the above run on the free tier (no Rovo Credits). Cross-product "Enriched" commands (`twg context`, `twg subgraph`, `twg collaborators`, `twg rovo search`, `twg search-code`, etc.) consume Rovo Credits — reach for `twg confluence search query` / `twg jira workitem query` first, and only use an Enriched command when the task genuinely needs cross-product graph context (e.g. "who else is touching this issue").
 
 ## MCP Fallback Protocol
 
-The Rovo MCP server is **disabled by default**. When an operation requires MCP:
+Only needed if `twg` isn't installed/authenticated. The Rovo MCP server (`io.vista/atlassian-mcp`) is **disabled by default**.
 
-1. Attempt the operation — if MCP tools are unavailable, tell the user:
-   > "This operation requires the Rovo MCP server. Please run `/mcp` to enable `io.vista/atlassian-rovo-mcp`, then let me know when it's on."
-2. Wait for confirmation, then retry.
-3. If the user declines, degrade gracefully:
-   - **CQL search** → ask the user for page IDs or URLs directly
-   - **Page updates** → draft the content and provide the Confluence edit link for manual paste
-   - **Comments** → provide text for user to post manually
+1. First, try to unblock `twg` itself — check `twg doctor`; if it's not installed, tell the user: "This needs the `twg` CLI — run `curl -fsSL --retry 2 https://teamwork-graph.atlassian.com/cli/install | bash` then `twg setup`, or I can fall back to MCP for this one operation."
+2. If the user wants the MCP fallback instead: tell them to run `/mcp` to enable `io.vista/atlassian-mcp`, then retry.
+3. If they decline both, degrade gracefully:
+   - **Search** → ask the user for issue keys / page IDs / URLs directly
+   - **Page/issue updates** → draft the content and give them the edit link for manual paste
+   - **Comments** → provide text for the user to post manually
 
-## Quick Reference
+## Note on `twg`'s own official skill
 
-### Jira — Common Patterns
-
-```bash
-# Search issues with JQL (use --json for structured output)
-acli jira workitem search --jql "project = PROJ AND status = 'In Progress'" --json
-
-# View issue details
-acli jira workitem view PROJ-123 --json
-
-# Create an issue
-acli jira workitem create --project PROJ --type Task --summary "Title" --description "Details" --assignee "@me"
-
-# Edit an issue
-acli jira workitem edit --key PROJ-123 --summary "Updated title" --yes
-
-# Transition an issue
-acli jira workitem transition --key PROJ-123 --status "Done" --yes
-
-# Add a comment
-acli jira workitem comment create --key PROJ-123 --body "Comment text"
-
-# Link two issues
-acli jira workitem link create --inward-key PROJ-123 --outward-key PROJ-456 --type "Blocks"
-```
-
-### Confluence — Common Patterns
-
-```bash
-# View a page by ID (with body content)
-acli confluence page view --id 1234567890 --body-format view --json
-
-# List spaces
-acli confluence space list --json
-
-# List blog posts in a space
-acli confluence blog list --space-id 12345 --json
-```
-
-### Confluence — MCP Patterns (when acli can't)
-
-```
-# CQL search (cloud ID: vistaprint.atlassian.net)
-searchConfluenceUsingCql(cql="contributor = currentUser() AND lastModified >= now('-7d')")
-
-# Get page body for editing
-getConfluencePage(pageId="1234567890", contentFormat="markdown")
-
-# Update page
-updateConfluencePage(pageId="1234567890", body="...", contentFormat="markdown")
-```
-
-See [REFERENCE.md](REFERENCE.md) for the full command reference with all flags and options.
+`twg setup` installs Atlassian's own maintained skill bundle to `~/.agents/skills/twg*` (`twg-jira`, `twg-confluence`, `twg-context-discovery`, etc.) — that bundle is the authoritative, self-updating source for command discovery and Atlassian-wide workflows. This skill exists only to pin the Vistaprint-specific site/auth context above; it deliberately does not duplicate `twg`'s own command reference (see `docs/adr/0008-*.md` for why).

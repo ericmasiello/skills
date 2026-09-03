@@ -121,7 +121,7 @@ check_cli() {
 echo
 check_cli gh
 check_cli td
-check_cli acli
+check_cli twg
 check_cli playwright-cli
 
 echo

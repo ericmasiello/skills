@@ -31,7 +31,7 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 |-----|---------|---------|
 | [`gh`](https://cli.github.com) | Issue tracker (`docs/agents/issue-tracker.md`), `/triage`, `/to-spec`, `/to-tickets` | `brew install gh` |
 | [`td`](https://github.com/Doist/todoist-cli) (`@doist/todoist-cli`) | `todoist-cli` skill | `brew install todoist-cli` |
-| [`acli`](https://developer.atlassian.com/cloud/acli/) | `vista-atlassian` skill (Vistaprint work-context) | `brew install atlassian/acli/acli` |
+| [`twg`](https://developer.atlassian.com/cloud/twg-cli/) (Teamwork Graph CLI) | `vista-atlassian` skill (Vistaprint work-context) | `curl -fsSL --retry 2 https://teamwork-graph.atlassian.com/cli/install \| bash` then `twg setup` (interactive OAuth login — can't be scripted headlessly) |
 | [`playwright-cli`](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) | Browser automation — `browser_automation_engine.provider` in `opencode/oh-my-openagent.json` is set to `playwright-cli` | `npm install -g @playwright/cli@latest` |
 | [`glab`](https://gitlab.com/gitlab-org/cli) | GitLab work — `gitlab-ci-watch`, `studio-*` skills, `address-pr-feedback` | `brew install glab` |
 

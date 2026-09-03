@@ -146,7 +146,7 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 - **[studio-review-test-coverage](./skills/studio-review-test-coverage/SKILL.md)**: Open HTML coverage reports for Studio source files in the browser.
 - **[studio-ship-work](./skills/studio-ship-work/SKILL.md)**: Commit, push, optionally open a GitLab MR (delegating the description to `write-pr-description`), and update the source issue's status labels.
 - **[studio-worktree-zed](./skills/studio-worktree-zed/SKILL.md)**: Create a git worktree from a GitLab issue and open it in Zed.
-- **[vista-atlassian](./skills/vista-atlassian/SKILL.md)**: Jira/Confluence via the `acli` CLI (Vistaprint-specific), with the Rovo MCP server as fallback.
+- **[vista-atlassian](./skills/vista-atlassian/SKILL.md)**: Jira/Confluence via Atlassian's official `twg` (Teamwork Graph CLI), pinned to the Vistaprint site — Rovo MCP is the fallback only if `twg` isn't set up.
 
 `skills/_studio-shared/LABELS.md` is a shared GitLab label reference several of the skills above read from — not an invocable skill itself.
 
