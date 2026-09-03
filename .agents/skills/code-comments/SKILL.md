@@ -21,7 +21,7 @@ Write and improve comments that describe things not obvious from the code. This 
 2. **Every function/method/hook** — behavior from caller's perspective, args, return, side effects, exceptions, preconditions
 3. **Every class/instance variable and important constants** — what it represents (nouns, not verbs), units, null meaning, invariants
 4. **Non-obvious implementation blocks** — why this code exists, overall intent (sparingly)
-5. **Bug fixes and workarounds** — link to the ticket (Jira, GitHub issue, etc.) and explain the non-obvious condition being addressed
+5. **Bug fixes and workarounds** — explain the non-obvious condition being addressed; a ticket reference may support that explanation, never replace it
 6. **Preconditions and side effects** — what must be true before calling, what state changes occur
 
 ## The Litmus Test
@@ -44,11 +44,11 @@ Describe what the component renders and why. Document props with `@param`, notin
 4. For hooks: document what triggers re-renders, cleanup behavior, and dependency expectations
 
 ### Bug Fixes and Workarounds
-When fixing a non-obvious bug or working around a quirk, comment **why** the fix is needed. Include a link to the ticket or context source. Ask the user for a Jira/GitHub/Slack link if they don't provide one.
+When fixing a non-obvious bug or working around a quirk, comment **why** the fix is needed. The explanation must stand on its own; a reader with no tracker access still understands the workaround. A ticket reference may follow to support that explanation, never to replace it, and only here. Never cite a ticket in an architecture, design, or general implementation comment, where a ticket ID reads as unexplained shorthand once the ticket closes or the tracker changes.
 
 ```typescript
-// Debounce resize handler to avoid layout thrashing on Safari.
-// See: https://jira.example.com/browse/FE-1234
+// Debounce resize handler to avoid layout thrashing from Safari's
+// forced-reflow bug on window resize. Ticket: FE-1234.
 ```
 
 ### Variable Comments
@@ -67,6 +67,12 @@ When fixing a non-obvious bug or working around a quirk, comment **why** the fix
 - [ ] Comment could be written without understanding the code
 - [ ] Variable comment describes how it's toggled rather than what it means
 - [ ] Comment restates the condition in an `if` statement
+- [ ] Ticket ID is the comment's main content, or appears outside a bug-fix/workaround comment
+- [ ] Comment reads as AI-generated; see Avoid AI-Slop below
+
+## Avoid AI-Slop
+
+Comments are prose and carry the same tells. Load `unslop` and run every authored comment past its patterns before finalizing: em-dash overuse, colon-as-connector, filler phrases, redundant restating. Skip `unslop`'s document-formatting rules, such as heading case and emojis, since they target prose docs rather than inline comments.
 
 ## Conventions
 
