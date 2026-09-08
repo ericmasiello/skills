@@ -1,8 +1,14 @@
 .DS_Store
 node_modules
 
-# used by the .agents/skills/skylight-homework skill
+# transient playwright-cli snapshots/console logs — can capture page content
+.playwright-cli/
+
+# used by the .agents/skills/skylight-homework and ixl-weekly-checkin skills
 *.local.json
 
 # used for /address-pr-feedback skill
 .scratch
+
+# used by the .agents/skills/ixl-weekly-checkin skill (IXL login + Sheets creds)
+.env

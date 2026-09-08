@@ -54,6 +54,7 @@ Most skills are invoked directly — this repo's setup ends at `./setup.sh`. A f
 | Skill | Needs |
 |-------|-------|
 | [`gitlab-ci-watch`](.agents/skills/gitlab-ci-watch/SKILL.md) | A recurring OpenChamber scheduled task — see prompt below |
+| [`ixl-weekly-checkin`](.agents/skills/ixl-weekly-checkin/SKILL.md) | Its own [`SETUP.md`](.agents/skills/ixl-weekly-checkin/SETUP.md) (login bootstrap, Google service account) plus a weekly OpenChamber scheduled task — see prompt below |
 
 ### Setting up `gitlab-ci-watch`
 
@@ -66,6 +67,14 @@ Paste this into an OpenChamber session (it has the `openchamber` tool and will c
 Adjust the cron expression, timezone, or model to taste — the cadence above is every 15 minutes, weekdays 9am–7pm ET, which was this skill's own POC default. Confirm it landed with `schedule.list`, then trigger it once manually with `schedule.run` before trusting the cron.
 
 Prefer a fresh session every run instead? Swap the prompt for `"Run the gitlab-ci-watch skill and report results."` — that's direct mode, no persistent thread, no double notification.
+
+### Setting up `ixl-weekly-checkin`
+
+Run [`SETUP.md`](.agents/skills/ixl-weekly-checkin/SETUP.md) once first — it covers the login bootstrap and Google service account, both of which the scheduled run below depends on. Then paste this, substituting `<path-to-your-clone>`:
+
+> Create an OpenChamber scheduled task named "IXL Weekly Check-In" with prompt "Run the ixl-weekly-checkin skill and report results.", weekly on Sunday, time 09:00, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `<path-to-your-clone>`.
+
+No routed/persistent-thread mode here — unlike `gitlab-ci-watch`'s every-15-minutes cadence, each Sunday's run is a fresh, self-contained session; the tracker sheet is the continuity, not a chat thread. Confirm it landed with `schedule.list`, then trigger it once manually with `schedule.run` before trusting the cron.
 
 ## Finding a skill
 
