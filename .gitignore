@@ -12,3 +12,6 @@ node_modules
 
 # used by the .agents/skills/ixl-weekly-checkin skill (IXL login + Sheets creds)
 .env
+
+# used by sisyphus agent
+.sisyphus/

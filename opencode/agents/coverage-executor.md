@@ -3,7 +3,7 @@ description: "Use when adding tests to ONE module/target to reach its coverage +
 name: 'Coverage Executor'
 permission:
   read: allow
-  edit: ask
+  edit: allow
   bash: allow
 argument-hint: 'One target module + its tier gate (line/branch/mutation) + requested test type + gap kind (no-tests|blocked|weak-tests) + blocker/weak-test evidence + suggested test sequence (from the auditor; or say "no plan" to trigger escalation)'
 user-invocable: true
