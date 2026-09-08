@@ -1,0 +1,21 @@
+{
+  "name": "ixl-weekly-checkin-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Sheets-update helper for the ixl-weekly-checkin skill — not a published package. Written as TypeScript, run directly by Node's built-in type-stripping (no build step, no ts-node).",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types update-weekly-log.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "google-auth-library": "^9.0.0",
+    "google-spreadsheet": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}
