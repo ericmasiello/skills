@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 # Verifies that setup.sh produces exactly the symlinks docs/adr/0009-*.md
-# says it should: ~/.agents and ~/.agents/skills as real directories, with
-# every top-level .agents/ entry and every .agents/skills/<name> skill
-# individually symlinked back into the repo. Run by CI
+# and docs/adr/0010-*.md say it should: ~/.agents, ~/.agents/skills, and
+# ~/.config/opencode/agents as real directories, with every entry inside
+# each individually symlinked back into the repo. Run by CI
 # (.github/workflows/verify-symlinks.yml) on every PR so setup.sh's linking
 # logic can't silently drift from what's actually in the repo.
 #
@@ -80,7 +80,25 @@ for entry in "$AGENTS_DEST/skills"/*; do
   [[ "$found" == 1 ]] || error "setup.sh produced an entry not present in the repo: $AGENTS_DEST/skills/$name"
 done
 
-check_symlink "$SCRATCH_HOME/.config/opencode/agents"              "$REPO_DIR/opencode/agents"
+OPENCODE_AGENTS_DEST="$SCRATCH_HOME/.config/opencode/agents"
+check_real_dir "$OPENCODE_AGENTS_DEST"
+
+expected_opencode_agents=()
+for entry in "$REPO_DIR/opencode/agents"/*; do
+  name="$(basename "$entry")"
+  expected_opencode_agents+=("$name")
+  check_symlink "$OPENCODE_AGENTS_DEST/$name" "$entry"
+done
+
+for entry in "$OPENCODE_AGENTS_DEST"/*; do
+  name="$(basename "$entry")"
+  found=0
+  for a in "${expected_opencode_agents[@]}"; do
+    [[ "$a" == "$name" ]] && found=1
+  done
+  [[ "$found" == 1 ]] || error "setup.sh produced an entry not present in the repo: $OPENCODE_AGENTS_DEST/$name"
+done
+
 check_symlink "$SCRATCH_HOME/.config/opencode/commands"            "$REPO_DIR/opencode/commands"
 check_symlink "$SCRATCH_HOME/.config/opencode/opencode.json"       "$REPO_DIR/opencode/opencode.json"
 check_symlink "$SCRATCH_HOME/.config/opencode/oh-my-openagent.json" "$REPO_DIR/opencode/oh-my-openagent.json"
@@ -102,8 +120,8 @@ done <<<"$vendor_patterns"
 if [[ "$fail" == 1 ]]; then
   echo
   echo "Symlink layout has drifted from what setup.sh / .gitignore expect."
-  echo "See docs/adr/0009-*.md."
+  echo "See docs/adr/0009-*.md and docs/adr/0010-*.md."
   exit 1
 fi
 
-echo "OK: symlink layout matches expectations for ${#expected_skills[@]} skills + top-level .agents/ entries."
+echo "OK: symlink layout matches expectations for ${#expected_skills[@]} skills, ${#expected_opencode_agents[@]} opencode agents, + top-level .agents/ entries."

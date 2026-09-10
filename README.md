@@ -78,7 +78,7 @@ No routed/persistent-thread mode here — unlike `gitlab-ci-watch`'s every-15-mi
 
 ## Finding a skill
 
-Start at [`.agents/README.md`](.agents/README.md) — a full catalog grouped by purpose (planning & delivery, principles, testing & characterization, code quality & review, productivity & docs, work-context, personal). Each skill's own `SKILL.md` is the source of truth for how to use it.
+Start at [`.agents/README.md`](.agents/README.md) — a full catalog grouped by purpose (planning & delivery, principles, code quality & review, productivity & docs, work-context, personal). Each skill's own `SKILL.md` is the source of truth for how to use it.
 
 ## Contributing to this repo
 
