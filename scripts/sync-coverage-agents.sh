@@ -10,9 +10,10 @@
 # location these agents lived in before
 # https://github.com/ericmasiello/skills/pull/26 removed them, so setup.sh's
 # existing whole-directory symlink of opencode/agents/ picks them straight
-# back up. Not wired into setup.sh itself: that script has to stay runnable
-# in CI (scripts/verify-setup-symlinks.sh), which has no vistaprint-skills
-# checkout to point at.
+# back up. Called from setup.sh, but skips itself (exit 0, no files touched)
+# when the checkout isn't found, so CI (scripts/verify-setup-symlinks.sh,
+# which runs setup.sh with no vistaprint-skills checkout on disk) stays
+# green.
 #
 # Re-run any time the upstream MR moves — see the transform this applies at
 # fc04375 ("Sync test quality skills + coverage agents with
@@ -33,8 +34,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST_DIR="$REPO_DIR/opencode/agents"
 
 if [[ ! -d "$SRC_DIR" ]]; then
-  echo "error: $SRC_DIR not found — pass the path to your vistaprint-skills checkout as \$1" >&2
-  exit 1
+  echo "SKIP:   $SRC_DIR not found — pass the path to your vistaprint-skills checkout as \$1"
+  exit 0
 fi
 
 sync_agent() {

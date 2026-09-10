@@ -109,6 +109,11 @@ link "$REPO_DIR/opencode/commands"              "$HOME/.config/opencode/commands
 link "$REPO_DIR/opencode/opencode.json"         "$HOME/.config/opencode/opencode.json"
 link "$REPO_DIR/opencode/oh-my-openagent.json"  "$HOME/.config/opencode/oh-my-openagent.json"
 
+echo
+# Temporary workaround, not a permanent part of this installer — see the
+# script's own header for why it exists and when to delete it.
+"$REPO_DIR/scripts/sync-coverage-agents.sh"
+
 # Warn (don't fail) if a CLI some skill/config depends on isn't installed.
 # See README.md's Prerequisites table for what needs each one and how to install it.
 check_cli() {
