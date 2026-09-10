@@ -1,0 +1,7 @@
+# `~/.config/opencode/agents` becomes a real directory with per-entry symlinks, like `~/.agents/skills`
+
+`docs/adr/0009-*.md` fixed this exact collision for `~/.agents/skills` when `twg skills install` started writing vendor content through a whole-directory symlink into this repo's git working tree. `~/.config/opencode/agents` had the identical shape of risk from day one — `setup.sh` linked it as one whole directory, the same way `.agents` was linked before 0009 — but no vendor tool wrote agents there until `vconfig opencode` started installing agents (not just skills) from `vistaprint-org/ai-engineering/skills` directly into `~/.config/opencode/agents/`. Those installs landed inside this repo's working tree through the symlink, same failure as `twg` once caused for skills.
+
+Applied 0009's pattern here too: `setup.sh` now calls `link_dir_contents` instead of `link` for `opencode/agents`, making it a real directory with each repo-tracked agent symlinked in individually. `vconfig` (or any other tool) can now write new agent files directly into `~/.config/opencode/agents/` without ever touching this repo. `scripts/verify-setup-symlinks.sh` gained the same real-dir-plus-per-entry-symlink check it already ran for `.agents/skills`.
+
+Left `opencode/commands` as a whole-directory symlink for now — no vendor tool writes there yet. If one starts, the fix is the same one-line `link` → `link_dir_contents` swap this ADR made for `agents`.

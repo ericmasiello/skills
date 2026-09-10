@@ -12,11 +12,12 @@
 # with a timestamped suffix, never deleted) before the symlink is created —
 # see docs/adr/0005-*.md for why.
 #
-# ~/.agents and ~/.agents/skills are real directories, not whole-directory
-# symlinks — every entry inside each is symlinked individually. This lets
-# vendor CLIs (e.g. `twg skills install`) write their own new, untracked
-# entries directly into ~/.agents/skills/ without ever landing inside this
-# repo's git working tree — see docs/adr/0009-*.md for why.
+# ~/.agents, ~/.agents/skills, and ~/.config/opencode/agents are real
+# directories, not whole-directory symlinks — every entry inside each is
+# symlinked individually. This lets vendor CLIs (e.g. `twg skills install`,
+# `vconfig opencode`) write their own new, untracked entries directly into
+# those directories without ever landing inside this repo's git working
+# tree — see docs/adr/0009-*.md and docs/adr/0010-*.md for why.
 #
 # CI (.github/workflows/verify-symlinks.yml, via scripts/verify-setup-symlinks.sh)
 # runs this script against a scratch HOME and fails the build if the symlinks
@@ -104,7 +105,7 @@ link_dir_contents() {
 link_dir_contents "$REPO_DIR/.agents" "$HOME/.agents" skills
 link_dir_contents "$REPO_DIR/.agents/skills" "$HOME/.agents/skills"
 
-link "$REPO_DIR/opencode/agents"                "$HOME/.config/opencode/agents"
+link_dir_contents "$REPO_DIR/opencode/agents"   "$HOME/.config/opencode/agents"
 link "$REPO_DIR/opencode/commands"              "$HOME/.config/opencode/commands"
 link "$REPO_DIR/opencode/opencode.json"         "$HOME/.config/opencode/opencode.json"
 link "$REPO_DIR/opencode/oh-my-openagent.json"  "$HOME/.config/opencode/oh-my-openagent.json"
