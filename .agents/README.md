@@ -67,7 +67,7 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[glab-auth-error](./skills/glab-auth-error/SKILL.md)**: Fix a `glab` 401/"no token found" error by running `glab auth login`/`glab auth status`, instead of hunting for an alternate auth path.
 - **[playwright](./skills/playwright/SKILL.md)**: Shadows the builtin browser-automation skill — model-invoked automatically for any browser task, forcing `playwright-cli` (headed by default) over `openchamber_web`. Requires `browser_automation_engine.provider: "playwright"` in `opencode/oh-my-openagent.json` — see `../docs/adr/0007-*.md` for why that pairing matters.
 - **[research](./skills/research/SKILL.md)**: Investigate a question against high-trust primary sources and capture findings as a Markdown file, run as a background agent.
-- **[code-comments](./skills/code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function.
+- **[writing-code-comments](./skills/writing-code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function. Named to match Studio's own project-scoped skill of the same name, so that one takes precedence there — see `../docs/adr/0011-*.md`.
 - **[wizard](./skills/wizard/SKILL.md)**: Generate an interactive bash wizard for steps only a human can perform (credentials, dashboards, provisioning).
 - **[thermo-nuclear-review](./skills/thermo-nuclear-review/SKILL.md)**: Comprehensive security and correctness audit of a branch's changes.
 - **[thermo-nuclear-code-quality-review](./skills/thermo-nuclear-code-quality-review/SKILL.md)**: Extremely strict maintainability review for abstraction quality and giant files.
