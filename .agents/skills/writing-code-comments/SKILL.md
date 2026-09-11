@@ -1,9 +1,9 @@
 ---
-name: code-comments
+name: writing-code-comments
 description: Writes and improves code comments that describe things not obvious from the code, and uses commenting as a design review forcing function. Use when writing new comments, improving existing comments, reviewing comment quality, challenging API design through documentation, or when user mentions "add comments", "document this", "comment this code", "improve comments", or asks about commenting conventions. Also activates when reviewing code that lacks or has poor comments.
 ---
 
-# Code Comments
+# Writing Code Comments
 
 Write and improve comments that describe things not obvious from the code. This applies to new code and when improving existing comments. Comments are essential for abstractions, not failures.
 
