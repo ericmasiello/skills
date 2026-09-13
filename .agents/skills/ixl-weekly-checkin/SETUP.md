@@ -8,7 +8,9 @@ Run every step below once, before the first real check-in. Nothing here recurs.
 cp config.local.json.example config.local.json
 ```
 
-Fill in `children` (must match each child's tab name in the sheet exactly — there's no shared "Weekly Log" tab, each kid has their own) and `sheetId` (from the tracker sheet's URL). `config.local.json` is gitignored (`*.local.json`) — never commit it.
+Fill in `children` (must match each child's raw-log tab name in the sheet exactly — there's no shared "Weekly Log" tab, each kid has their own) and `sheetId` (from the tracker sheet's URL). `config.local.json` is gitignored (`*.local.json`) — never commit it.
+
+The sheet also needs a shared `Weekly Summary` tab (headers: `Week Of | Child | Math Level | ELA Level | Anomalies | Notes`) — one tab total, not per-child. Create it by hand, or once via the Sheets API (see [SKILL.md](SKILL.md#config) for the exact header list).
 
 ## 2. Bootstrap the IXL login
 

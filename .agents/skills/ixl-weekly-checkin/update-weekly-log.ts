@@ -1,15 +1,26 @@
 #!/usr/bin/env -S node --experimental-strip-types
-// Writes one week's row for a child into their own tab (tab name = child
-// name — this sheet has no shared "Weekly Log" tab). Column values are
-// matched by header name, not position. If a row with a matching "Week Of"
-// date already exists, only its currently-blank cells are filled in (so a
-// value Eric already typed in by hand is never silently overwritten) —
-// otherwise a new row is appended. "Math Pace (sec/q)" and "ELA Pace
-// (sec/q)" are sheet formulas, not values this script writes directly (see
-// PACE_FORMULAS below) — any such keys in the payload are ignored.
+// Writes IXL check-in data into the family's tracker sheet. Two independent
+// write modes, chosen by which top-level key the payload carries:
+//
+//   "entries" — one or more raw per-skill-entry rows into a child's own tab
+//     (tab name = child name, e.g. "Hunter"/"Avery"). Columns: Date | Subject
+//     | Questions Answered | Questions Missed | Time Spent | Category
+//     (Math/ELA). Each entry is matched against existing rows by (Date,
+//     Subject) — if a row for that exact skill on that exact day already
+//     exists, only its currently-blank cells are filled in (never overwrite
+//     a value already there); otherwise a new row is appended.
+//
+//   "summary" — one weekly row into the shared "Weekly Summary" tab (not
+//     per-child — one tab, a Child column distinguishes rows). Columns: Week
+//     Of | Child | Math Level | ELA Level | Anomalies | Notes. Matched by
+//     (Week Of, Child) with the same fill-blanks-only semantics.
+//
+// A single invocation takes exactly one of "entries" or "summary" — call the
+// script twice (once per mode) to record both for a given child's week.
 //
 // Usage:
-//   node --experimental-strip-types update-weekly-log.ts '{"child":"Avery","row":{"Week Of":"9/7/2026","Math Level":230,"ELA Level":160,"Math Questions":40,"Math Time (hr)":0.5,"ELA Questions":20,"ELA Time (hr)":0.3,"Anomalies":"...","Notes":"..."}}'
+//   node --experimental-strip-types update-weekly-log.ts '{"child":"Hunter","entries":[{"Date":"9/8/2026","Subject":"PK (D.6) Choose the letter that you hear","Category (Math/ELA)":"ELA","Questions Answered":14,"Questions Missed":0,"Time Spent":1}]}'
+//   node --experimental-strip-types update-weekly-log.ts '{"summary":{"Week Of":"9/13/2026","Child":"Hunter","Math Level":320,"ELA Level":"150-230","Anomalies":"...","Notes":"..."}}'
 //
 // Environment (see .env.example):
 //   GOOGLE_SHEETS_CREDENTIALS  path to a service-account JSON key — the path,
@@ -21,48 +32,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GoogleSpreadsheet, type GoogleSpreadsheetWorksheet } from 'google-spreadsheet';
+import { GoogleSpreadsheet, type GoogleSpreadsheetWorksheet, type GoogleSpreadsheetRow } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 
-/** One week's row as sent by the caller — every column is optional except
- * "Week Of", since a run may only have data for one subject, or none yet
- * for a first-ever week. */
-interface WeeklyLogRow {
-  'Week Of': string;
+const WEEKLY_SUMMARY_TAB = 'Weekly Summary';
+
+/** A single practiced-skill row for a child's raw log tab. */
+interface EntryRow {
+  Date: string;
+  Subject: string;
   [column: string]: string | number;
 }
 
-interface UpdatePayload {
-  child: string;
-  row: WeeklyLogRow;
+/** A single week's diagnostic-level + anomaly row for the shared summary tab. */
+interface SummaryRow {
+  'Week Of': string;
+  Child: string;
+  [column: string]: string | number;
 }
 
-interface PaceFormulaSpec {
-  questions: string;
-  time: string;
+interface EntriesPayload {
+  child: string;
+  entries: EntryRow[];
+}
+
+interface SummaryPayload {
+  summary: SummaryRow;
 }
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 const SKILL_DIR = path.dirname(fileURLToPath(import.meta.url));
-
-// Each pace column is derived from its own questions/time columns, resolved
-// by header name (not a hardcoded column letter) so this survives the sheet
-// being reordered by hand.
-const PACE_FORMULAS: Record<string, PaceFormulaSpec> = {
-  'Math Pace (sec/q)': { questions: 'Math Questions', time: 'Math Time (hr)' },
-  'ELA Pace (sec/q)': { questions: 'ELA Questions', time: 'ELA Time (hr)' },
-};
-
-function columnLetter(zeroBasedIndex: number): string {
-  let n = zeroBasedIndex + 1;
-  let letters = '';
-  while (n > 0) {
-    const remainder = (n - 1) % 26;
-    letters = String.fromCharCode(65 + remainder) + letters;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letters;
-}
 
 function readSheetIdFromConfig(): string | undefined {
   const configPath = path.join(SKILL_DIR, 'config.local.json');
@@ -71,49 +70,92 @@ function readSheetIdFromConfig(): string | undefined {
   return config.sheetId;
 }
 
-async function ensurePaceFormulas(sheet: GoogleSpreadsheetWorksheet, rowNumber: number): Promise<void> {
-  const headers = sheet.headerValues;
-  await sheet.loadCells(`A${rowNumber}:${columnLetter(headers.length - 1)}${rowNumber}`);
+/** Fill only the currently-blank cells of `values` into `row`, leaving any
+ * value a human or a prior run already wrote untouched. Returns the column
+ * names that were left alone because they already had a value. */
+function fillBlanksOnly(row: GoogleSpreadsheetRow, values: Record<string, string | number>): string[] {
+  const skipped: string[] = [];
+  for (const [column, value] of Object.entries(values)) {
+    const current = row.get(column);
+    if (current !== undefined && current !== null && String(current).trim() !== '') {
+      skipped.push(column);
+      continue;
+    }
+    row.set(column, value);
+  }
+  return skipped;
+}
 
-  for (const [paceHeader, { questions, time }] of Object.entries(PACE_FORMULAS)) {
-    const paceIndex = headers.indexOf(paceHeader);
-    const questionsIndex = headers.indexOf(questions);
-    const timeIndex = headers.indexOf(time);
-    if (paceIndex === -1 || questionsIndex === -1 || timeIndex === -1) continue;
+async function upsertByKey(
+  sheet: GoogleSpreadsheetWorksheet,
+  values: Record<string, string | number>,
+  keyColumns: string[]
+): Promise<{ appended: boolean; skipped: string[] }> {
+  const rows = await sheet.getRows();
+  const existing = rows.find((r) => keyColumns.every((col) => String(r.get(col) ?? '').trim() === String(values[col] ?? '').trim()));
 
-    const cell = sheet.getCell(rowNumber - 1, paceIndex);
-    if (cell.formula) continue; // already has a formula — never overwrite it
-
-    const questionsCol = columnLetter(questionsIndex);
-    const timeCol = columnLetter(timeIndex);
-    cell.formula = `=IFERROR(${timeCol}${rowNumber}*3600/${questionsCol}${rowNumber},"")`;
+  if (!existing) {
+    await sheet.addRow(values);
+    return { appended: true, skipped: [] };
   }
 
-  await sheet.saveUpdatedCells();
+  const skipped = fillBlanksOnly(existing, values);
+  await existing.save();
+  return { appended: false, skipped };
+}
+
+async function writeEntries(doc: GoogleSpreadsheet, { child, entries }: EntriesPayload): Promise<void> {
+  const sheet = doc.sheetsByTitle[child];
+  if (!sheet) {
+    console.error(
+      `No tab named "${child}" in this spreadsheet. Tabs found: ${Object.keys(doc.sheetsByTitle).join(', ')}`
+    );
+    process.exit(1);
+  }
+
+  for (const entry of entries) {
+    if (!entry.Date || !entry.Subject) {
+      console.error(`Skipping entry missing "Date" or "Subject": ${JSON.stringify(entry)}`);
+      continue;
+    }
+    const { appended, skipped } = await upsertByKey(sheet, entry, ['Date', 'Subject']);
+    const label = `${child} / ${entry.Date} / ${entry.Subject}`;
+    if (appended) {
+      console.log(`Appended: ${label}`);
+    } else {
+      console.log(`Updated (already existed): ${label}${skipped.length ? ` — left untouched: ${skipped.join(', ')}` : ''}`);
+    }
+  }
+}
+
+async function writeSummary(doc: GoogleSpreadsheet, { summary }: SummaryPayload): Promise<void> {
+  let sheet = doc.sheetsByTitle[WEEKLY_SUMMARY_TAB];
+  if (!sheet) {
+    console.error(
+      `No "${WEEKLY_SUMMARY_TAB}" tab in this spreadsheet. Create it first with headers: Week Of, Child, Math Level, ELA Level, Anomalies, Notes.`
+    );
+    process.exit(1);
+  }
+
+  const { appended, skipped } = await upsertByKey(sheet, summary, ['Week Of', 'Child']);
+  const label = `${summary.Child} / week of ${summary['Week Of']}`;
+  if (appended) {
+    console.log(`Appended summary row: ${label}`);
+  } else {
+    console.log(`Updated summary row (already existed): ${label}${skipped.length ? ` — left untouched: ${skipped.join(', ')}` : ''}`);
+  }
 }
 
 async function main(): Promise<void> {
   const payloadJson = process.argv[2];
   if (!payloadJson) {
     console.error(
-      'Usage: node --experimental-strip-types update-weekly-log.ts \'{"child":"Avery","row":{"Week Of":"9/7/2026",...}}\''
+      'Usage: node --experimental-strip-types update-weekly-log.ts \'{"child":"Hunter","entries":[...]}\' OR \'{"summary":{...}}\''
     );
     process.exit(1);
   }
 
-  const { child, row } = JSON.parse(payloadJson) as Partial<UpdatePayload>;
-  if (!child || !row || !row['Week Of']) {
-    console.error('Payload must include "child" and a "row" object with at least "Week Of".');
-    process.exit(1);
-  }
-
-  const values: WeeklyLogRow = { ...row };
-  for (const paceHeader of Object.keys(PACE_FORMULAS)) {
-    if (paceHeader in values) {
-      console.error(`Ignoring "${paceHeader}" in payload — it's a sheet formula, not a written value.`);
-      delete values[paceHeader];
-    }
-  }
+  const payload = JSON.parse(payloadJson) as Partial<EntriesPayload & SummaryPayload>;
 
   const credsPath = process.env.GOOGLE_SHEETS_CREDENTIALS;
   const sheetId = process.env.SHEET_ID || readSheetIdFromConfig();
@@ -132,40 +174,30 @@ async function main(): Promise<void> {
   const doc = new GoogleSpreadsheet(sheetId, auth);
   await doc.loadInfo();
 
-  const sheet = doc.sheetsByTitle[child];
-  if (!sheet) {
-    console.error(
-      `No tab named "${child}" in this spreadsheet. Tabs found: ${Object.keys(doc.sheetsByTitle).join(', ')}`
-    );
-    process.exit(1);
-  }
-
-  const rows = await sheet.getRows<WeeklyLogRow>();
-  const existing = rows.find((r) => String(r.get('Week Of')).trim() === String(values['Week Of']).trim());
-
-  if (!existing) {
-    const newRow = await sheet.addRow(values);
-    await ensurePaceFormulas(sheet, newRow.rowNumber);
-    console.log(`Appended a new row for ${child}, week of ${values['Week Of']}.`);
+  if (payload.entries) {
+    if (!payload.child) {
+      console.error('Payload with "entries" must also include "child".');
+      process.exit(1);
+    }
+    if (!Array.isArray(payload.entries) || payload.entries.length === 0) {
+      console.error('"entries" must be a non-empty array.');
+      process.exit(1);
+    }
+    await writeEntries(doc, payload as EntriesPayload);
     return;
   }
 
-  const skipped: string[] = [];
-  for (const [column, value] of Object.entries(values)) {
-    const current = existing.get(column);
-    if (current !== undefined && current !== null && String(current).trim() !== '') {
-      skipped.push(column);
-      continue;
+  if (payload.summary) {
+    if (!payload.summary['Week Of'] || !payload.summary.Child) {
+      console.error('"summary" must include "Week Of" and "Child".');
+      process.exit(1);
     }
-    existing.set(column, value);
+    await writeSummary(doc, payload as SummaryPayload);
+    return;
   }
-  await existing.save();
-  await ensurePaceFormulas(sheet, existing.rowNumber);
 
-  console.log(`Updated existing row for ${child}, week of ${values['Week Of']}.`);
-  if (skipped.length > 0) {
-    console.log(`Left untouched (already had a value): ${skipped.join(', ')}`);
-  }
+  console.error('Payload must include either "entries" (with "child") or "summary".');
+  process.exit(1);
 }
 
 main().catch((err: unknown) => {
