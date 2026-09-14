@@ -60,6 +60,41 @@ When fixing a non-obvious bug or working around a quirk, comment **why** the fix
 - Describe **why** and **what** at a high level, not **how**
 - Ask: "What is this code trying to do?" — write that, not a line-by-line narration
 
+### Test Comments
+
+Test comments are terser than implementation comments elsewhere, and follow a fixed order: **what**, then **why**.
+
+- **What** — name the thing the line does, in different words than the code.
+- **Why** — say why this line is necessary here: what would break or go unverified without it.
+- Include only the half that isn't obvious from the code next to it. _Why_ is the higher-value half, so an obvious why is reason enough to drop the comment even when _what_ is mildly unclear.
+- **Length scales with what the comment precedes, not with how important it feels.** Before a single line, the comment is one statement — fold what and why into that one clause rather than joining two clauses with a dash or semicolon. Before a block of several related lines (a setup phase, a matcher group), it may run to two sentences, never more.
+
+```typescript
+// Second click during the toast window exercises the debounce guard.
+fireEvent.click(button);
+fireEvent.click(button);
+expect(onSubmit).toHaveBeenCalledTimes(1);
+```
+
+#### Stateful Comments
+
+Tests that walk through several state transitions before the final assertion — check a box, click a button, wait for a modal — are hard to visualize from the code alone. A **stateful comment** is a comment marking the state the test has just reached, written before the next transition or assertion.
+
+- Describes the state, not the action that produced it — present tense
+- Only where the resulting state isn't obvious from the line above it
+- Skip it where the very next assertion already says the state
+- Same length rule as What + Why comments: one statement before a single transition line, up to two sentences only when summarizing a block of setup steps that led to the state
+
+```typescript
+fireEvent.click(checkbox);
+// Checkbox is now checked, enabling submit.
+fireEvent.click(submitButton);
+// Modal has not appeared yet while the submit request is in flight.
+await waitFor(() => expect(modal).toBeVisible());
+```
+
+See [REFERENCE.md](REFERENCE.md) for more worked examples of test and stateful comments.
+
 ## Red Flags
 
 - [ ] Comment uses the same words as the entity name
@@ -69,6 +104,9 @@ When fixing a non-obvious bug or working around a quirk, comment **why** the fix
 - [ ] Comment restates the condition in an `if` statement
 - [ ] Ticket ID is the comment's main content, or appears outside a bug-fix/workaround comment
 - [ ] Comment reads as AI-generated; see Avoid AI-Slop below
+- [ ] Test comment keeps a half whose why (or what and why) is obvious
+- [ ] Comment before a single line joins two independent clauses instead of standing as one statement
+- [ ] Stateful comment narrates the action ("clicks the button") instead of the state it produced
 
 ## Avoid AI-Slop
 

@@ -91,6 +91,48 @@ private boolean receivedValidHeartbeat;
 
 First sentence = **why** this code executes. Second sentence = **what** it does abstractly.
 
+## Good: What + Why (Tests)
+
+```typescript
+// BAD — narrates the action, not why it's needed
+// Click the button twice
+fireEvent.click(button);
+fireEvent.click(button);
+expect(onSubmit).toHaveBeenCalledTimes(1);
+
+// BAD — what and why are correct but joined as two clauses, not one statement
+// Second click while the toast is visible — debounce guard should absorb it.
+fireEvent.click(button);
+fireEvent.click(button);
+expect(onSubmit).toHaveBeenCalledTimes(1);
+
+// GOOD — what and why fused into one statement
+// Second click during the toast window exercises the debounce guard.
+fireEvent.click(button);
+fireEvent.click(button);
+expect(onSubmit).toHaveBeenCalledTimes(1);
+```
+
+The first bad version repeats the code. The second names the right information but as two dash-joined clauses; a comment before a single line is one statement, not two. The good version fuses what's happening (a second click during the toast window) and why it matters (it exercises the debounce guard) into a single clause. The order is reversed from implementation comments: tests lead with **what**, not why.
+
+## Good: Stateful Comment (Tests)
+
+```typescript
+// BAD — no state given; reader has to trace three lines to know where the UI is
+fireEvent.click(checkbox);
+fireEvent.click(submitButton);
+await waitFor(() => expect(modal).toBeVisible());
+
+// GOOD — a one-statement stateful comment marks each transition
+fireEvent.click(checkbox);
+// Checkbox is now checked, enabling submit.
+fireEvent.click(submitButton);
+// Modal has not appeared yet while the submit request is in flight.
+await waitFor(() => expect(modal).toBeVisible());
+```
+
+Each stateful comment describes where the test has arrived, not the click that got it there, so the reader can follow the UI's state without re-running the test mentally. Both comments here precede a single line, so each stays one statement; a stateful comment summarizing a multi-line setup block could run to two sentences, never more.
+
 ## Good: Class Interface Comment
 
 ```java
