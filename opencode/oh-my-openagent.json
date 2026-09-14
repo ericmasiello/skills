@@ -9,6 +9,10 @@
       "model": "cimpress-ai-gateway/gpt-5.5",
       "variant": "high"
     },
+    "hephaestus": {
+      "model": "cimpress-ai-gateway/gpt-5.5",
+      "variant": "medium"
+    },
     "librarian": {
       "model": "cimpress-ai-gateway/eu.anthropic.claude-sonnet-5"
     },
