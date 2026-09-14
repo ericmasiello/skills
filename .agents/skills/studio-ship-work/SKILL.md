@@ -48,6 +48,7 @@ Invoke the `write-pr-description` skill to compose and apply the MR description.
 
 - The issue(s) resolved in step 1, for its issue-closing footer.
 - This steering note for its reviewer-test-guidance section: "Preview deployments cover the Vistaprint DEX, VCS DEX, and Design Services DEX. Vistaprint DEX is the default — don't name it explicitly unless the change also touches a non-default DEX (VCS DEX, Design Services DEX), in which case name that one."
+- This steering note for the title: "The `validate_mr_title` CI job blocks the MR — it lints the title as the future squash-commit message. Use one of these types, wider than your own default list: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`. Format: `type(scope): subject` (source of truth: `commitlint.config.mjs`; rationale: `docs/globalAdr/0031-adopt-conventional-commits-for-mr-intent.md`)."
 
 Only skip invoking it if the user explicitly says not to create an MR (e.g., "don't create an MR", "no MR") and none already exists.
 
@@ -59,7 +60,7 @@ glab mr update --label "<workstream::* label from step 1>" --label "status::awai
 
 > **If creating**, pass `--source-branch "$(git branch --show-current)"` explicitly and avoid `--related-issue`/`--copy-issue-labels` — `--related-issue` causes glab to auto-generate a source branch name from the issue title instead of using the current branch, resulting in an MR with 0 commits. Link the issue via the `Closes #<iid>` footer in the body instead.
 
-Reviewer test guidance and the `## Architecture` diagram convention live in `write-pr-description`'s writing-craft reference now — the steering note above is the only Vistaprint-specific residue.
+Reviewer test guidance and the `## Architecture` diagram convention live in `write-pr-description`'s writing-craft reference now — the DEX and MR-title steering notes above are the only Vistaprint/Studio-specific residue left.
 
 ### 5. Update issue status
 
