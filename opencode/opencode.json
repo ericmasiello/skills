@@ -16,7 +16,7 @@
     },
     "io.vista/cortex-mcp": {
       "type": "remote",
-      "enabled": true,
+      "enabled": false,
       "url": "https://mcp.cortex.io/mcp",
       "headers": {
         "Authorization": "Bearer {env:CORTEX_API_TOKEN}"
