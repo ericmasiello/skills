@@ -23,6 +23,7 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[implement](./skills/implement/SKILL.md)**: Implement a piece of work based on a spec or set of tickets.
 - **[split-mr](./skills/split-mr/SKILL.md)**: Decide whether a branch's diff should ship as a stack of small, single-concern MRs, a set of parallel ones, or stay as one — then build the chosen split.
 - **[write-pr-description](./skills/write-pr-description/SKILL.md)**: Compose or update a PR/MR title and description, honoring any repo-defined template — fires on creating a PR/MR, pushing to a branch that already has one open, or an explicit ask. Used by `studio-ship-work` as its description-composing step.
+- **[architectural-sketch](./skills/architectural-sketch/SKILL.md)**: Describe architectural changes, structural modifications, or implementation phases using before/after code diagrams and structural sketches.
 - **[code-review](./skills/code-review/SKILL.md)**: Two-axis review (Standards + Spec) of the changes since a fixed point, run as parallel sub-agents.
 - **[address-pr-feedback](./skills/address-pr-feedback/SKILL.md)**: Triage PR/MR review comments one at a time, reply, resolve, implement changes, and close out threads.
 - **[triage](./skills/triage/SKILL.md)**: Move issues and external PRs through a state machine of triage roles, categorize, verify, and write agent-ready briefs.
