@@ -15,3 +15,8 @@ node_modules
 
 # used by sisyphus agent
 .sisyphus/
+
+# python bytecode cache
+__pycache__/
+*.pyc
+*.pyo

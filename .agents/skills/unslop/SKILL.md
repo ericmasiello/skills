@@ -1,18 +1,132 @@
 ---
 name: unslop
-description: Cut AI tells from any writing. Must always apply.
+description: Audit and edit drafted markdown documents, Proof docs, Confluence pages, ADRs, specs, PR descriptions, and long-form prose to remove AI tells using the 4-auditor pipeline. Use as the required second pass after drafting before publishing or saving.
 ---
 
 # Unslop
 
-Edit text to remove AI patterns and add human voice.
+Edit text to remove AI patterns and add human voice. This is an **audit-and-patch
+pipeline**, not a one-shot rewrite. The numbered rules below are the source of
+truth. Every run must account for all 33 rules.
 
-## Process
+## Editor Agent protocol
 
-1. Scan for the patterns below.
-2. Rewrite. Preserve meaning, match intended tone.
-3. Add soul (see next section).
-4. Self-audit: "What makes this obviously AI generated?" Fix remaining tells. Then read only the first three or four words of each sentence in turn. If several open the same way, that shape is padding, not content. Vary it or cut the sentence.
+The Editor Agent owns the document and orchestrates four read-only auditors.
+Auditors find violations; only the Editor Agent changes prose. This separation
+prevents an editor from silently skipping rules while it is also inventing
+replacement text.
+
+### 1. Freeze the input
+
+Keep the original text available. Do not pre-number the file; the `read` tool numbers lines automatically. Pass the raw file path. Preserve the author's meaning, facts, links, code, and requested tone. Do not rewrite yet.
+
+### 2. Run the mechanical gate
+
+Run the deterministic checker before asking an LLM to interpret prose:
+
+```sh
+python3 .agents/skills/unslop/scripts/mechanical_audit.py path/to/draft.md
+```
+
+It reports machine-detectable violations with rule IDs, line numbers, and column offsets. A non-empty report is a patch queue, not a suggestion to remember later.
+
+### 3. Dispatch the specialist auditors in parallel
+
+Give each auditor the raw input path and instruct it to report **every** violation it can find, not a rewritten document. Instruct auditors to **emit the coverage summary first** before detailed findings to ensure load-bearing coverage data survives output length limits.
+
+Each finding must follow this exact format:
+
+```text
+Rule: <number> (<canonical rule name>)
+Location: line or sentence number
+Evidence: exact quoted span
+Why: which rule it breaks
+Patch: minimal replacement, or DELETE
+Confidence: high | medium | low
+```
+
+Use these explicit assignments with canonical rule names:
+
+- `unslop-content-auditor`:
+  - rule 1 (puffery)
+  - rule 2 (name-dropping)
+  - rule 3 (superficial -ing phrases)
+  - rule 4 (promotional language)
+  - rule 5 (vague attributions)
+  - rule 6 (formulaic challenges)
+
+- `unslop-language-auditor`:
+  - rule 7 (AI vocabulary)
+  - rule 8 (fancy ways to say "is")
+  - rule 9 ("not just X, but Y")
+  - rule 10 (rule of three)
+  - rule 11 (synonym cycling)
+  - rule 12 (false ranges)
+  - rule 26 (abstract metaphor nouns)
+  - rule 31 (prefer the plain word)
+  - rule 32 (cut nominalizations)
+
+- `unslop-structure-auditor`:
+  - rule 13 (em dash overuse — consult `reference/em-dash-patterns.md`)
+  - rule 14 (colon overuse)
+  - rule 15 (boldface overuse)
+  - rule 16 (inline-header lists)
+  - rule 17 (title case headings)
+  - rule 18 (decorative emojis)
+  - rule 19 (curly quotes)
+  - rule 23 (filler phrases)
+  - rule 24 (excessive hedging)
+  - rule 25 (generic conclusions)
+  - rule 27 (say what it does, not how it feels)
+  - rule 28 (shorten or split dense sentences)
+  - rule 29 (active voice)
+  - rule 30 (cut adverbs, or use a stronger verb)
+  - rule 33 (lead with the point)
+
+- `unslop-soul-auditor`: the **Adding soul** checklist and an overlapping recall pass over:
+  - rule 1 (puffery)
+  - rule 6 (formulaic challenges)
+  - rule 22 (sycophantic tone)
+  - rule 27 (say what it does, not how it feels)
+  - rule 28 (shorten or split dense sentences)
+  - rule 29 (active voice)
+  - rule 30 (cut adverbs, or use a stronger verb)
+  - rule 33 (lead with the point)
+  It must identify sterile passages and missed structural rules, without manufacturing personal opinions or facts the author did not provide.
+
+The auditors must read the numbered rules in this file. The Editor Agent must validate that every reported finding's rule name matches its number, rejecting misnumbered entries.
+
+### 4. Merge findings into a coverage ledger
+
+The Editor Agent merges mechanical and specialist findings by location. Create one ledger row for every rule, even when the result is `clear`:
+
+```text
+Rule 01 (puffery) | status: clear | findings: 0
+Rule 02 (name-dropping) | status: patch | findings: 1 | lines: 14
+...
+Rule 33 (lead with the point) | status: clear | findings: 0
+```
+
+Do not proceed while a rule is missing from the ledger. Conflicting patches are resolved by preserving meaning, then choosing the smallest change. Low-confidence findings are reviewed by the Editor Agent rather than blindly applied.
+
+### 5. Apply patches, verify regressions, then re-audit
+
+Apply accepted patches from the ledger in one editing pass.
+
+**Step 5b (Regression diff check):**
+Diff the patched text against the pre-patch text. Run the mechanical gate on the diff's added/changed lines. If any new finding appears in added lines (e.g. accidentally introducing a rule 9 "not just" contrast or dangling clause while fixing boldface/em dashes), fix the regression immediately before initiating specialist re-audits.
+
+**Step 5c (Specialist re-audit):**
+Re-run the mechanical gate and all specialist audits against the edited text. Stop only when every rule is `clear` or has an explicit, justified exception:
+
+```text
+Rule: 29 (active voice)
+Status: exception
+Text: "The file was deleted by the user."
+Reason: actor is intentionally unknown and the passive is materially clearer.
+```
+
+The final response reports the coverage ledger, exceptions, and any meaning or fact the Editor Agent declined to change. Never claim "unslopped" based only on the rewritten output.
 
 ## Adding soul
 

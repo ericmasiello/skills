@@ -42,6 +42,8 @@ The JSON response includes `markdown`, `_links` (state, ops, docs), and `agent.a
 
 ## Quick Start: Create a Document
 
+Before creating or publishing a document, compose the markdown draft and run it through the `unslop` skill's audit-and-patch pipeline as a mandatory second pass. Only publish once the unslop coverage ledger is clear.
+
 ```bash
 curl -sS -X POST "$BASE_URL/documents" \
   -H "Content-Type: application/json" \
