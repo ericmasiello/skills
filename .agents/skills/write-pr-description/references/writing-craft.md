@@ -57,7 +57,7 @@ Include a section telling a **human reviewer** what to check manually against a 
 
 Include a `## Architecture` section when the change involves structural modifications: new providers or boundaries, hook extractions, data-flow changes, API/interface changes, or significant call-site migrations. Skip it for pure bug fixes, isolated style tweaks, or renames obvious from the diff.
 
-Use text-based code diagrams (no Mermaid here — Mermaid is for the topology cases in Step H) annotated with a file-path comment on every block:
+Follow the `architectural-sketch` skill convention: use text-based code diagrams (no Mermaid here — Mermaid is for the topology cases in Step H) annotated with a file-path comment on every block:
 
 ```tsx
 // Before — path/to/File.tsx
@@ -67,7 +67,7 @@ Use text-based code diagrams (no Mermaid here — Mermaid is for the topology ca
 <NewStructure />
 ```
 
-Use `// NEW` instead of a before/after pair for anything purely additive. Omit the before entirely for bug fixes (the before state was broken) or obvious renames. Cover two levels, in this order: the API/call-site level first (how consumers interact with the changed code), then the internals level (what changed inside the implementation) if it adds insight beyond the diff.
+Use `// NEW` instead of a before/after pair for anything purely additive. Omit the before entirely for bug fixes (the before state was broken) or obvious renames. Cover two levels, in this order: the API/call-site level first (how consumers interact with the changed code), then the internals level (what changed inside the implementation) if it adds insight beyond the diff. See `architectural-sketch` for full before/after and multi-phase sketch guidance.
 
 ## H. Visual aid for everything else
 

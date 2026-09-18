@@ -60,7 +60,7 @@ glab mr update --label "<workstream::* label from step 1>" --label "status::awai
 
 > **If creating**, pass `--source-branch "$(git branch --show-current)"` explicitly and avoid `--related-issue`/`--copy-issue-labels` — `--related-issue` causes glab to auto-generate a source branch name from the issue title instead of using the current branch, resulting in an MR with 0 commits. Link the issue via the `Closes #<iid>` footer in the body instead.
 
-Reviewer test guidance and the `## Architecture` diagram convention live in `write-pr-description`'s writing-craft reference now — the DEX and MR-title steering notes above are the only Vistaprint/Studio-specific residue left.
+Reviewer test guidance and the `## Architecture` diagram convention (from the `architectural-sketch` skill) live in `write-pr-description`'s writing-craft reference now — the DEX and MR-title steering notes above are the only Vistaprint/Studio-specific residue left.
 
 ### 5. Update issue status
 
