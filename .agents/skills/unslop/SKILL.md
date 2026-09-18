@@ -1,18 +1,101 @@
 ---
 name: unslop
-description: Cut AI tells from any writing. Must always apply.
+description: Audit and edit drafted markdown documents, Proof docs, Confluence pages, ADRs, specs, PR descriptions, and long-form prose to remove AI tells using the 4-auditor pipeline. Use as the required second pass after drafting before publishing or saving.
 ---
 
 # Unslop
 
-Edit text to remove AI patterns and add human voice.
+Edit text to remove AI patterns and add human voice. This is an **audit-and-patch
+pipeline**, not a one-shot rewrite. The numbered rules below are the source of
+truth. Every run must account for all 33 rules.
 
-## Process
+## Editor Agent protocol
 
-1. Scan for the patterns below.
-2. Rewrite. Preserve meaning, match intended tone.
-3. Add soul (see next section).
-4. Self-audit: "What makes this obviously AI generated?" Fix remaining tells. Then read only the first three or four words of each sentence in turn. If several open the same way, that shape is padding, not content. Vary it or cut the sentence.
+The Editor Agent owns the document and orchestrates four read-only auditors.
+Auditors find violations; only the Editor Agent changes prose. This separation
+prevents an editor from silently skipping rules while it is also inventing
+replacement text.
+
+### 1. Freeze the input
+
+Keep the original text available and assign stable line numbers. Preserve the
+author's meaning, facts, links, code, and requested tone. Do not rewrite yet.
+
+### 2. Run the mechanical gate
+
+Run the deterministic checker before asking an LLM to interpret prose:
+
+```sh
+python3 .agents/skills/unslop/scripts/mechanical_audit.py path/to/draft.md
+```
+
+It reports machine-detectable violations with rule IDs and line numbers. A
+non-empty report is a patch queue, not a suggestion to remember later.
+
+### 3. Dispatch the specialist auditors in parallel
+
+Give each auditor the unchanged, line-numbered input and instruct it to report
+**every** violation it can find, not a rewritten document. Each finding must
+contain:
+
+```text
+Rule: 1-33
+Location: line or sentence number
+Evidence: exact quoted span
+Why: which rule it breaks
+Patch: minimal replacement, or DELETE
+Confidence: high | medium | low
+```
+
+Use these assignments:
+
+- `unslop-content-auditor`: rules 1-6 (content and factual specificity).
+- `unslop-language-auditor`: rules 7-12, 26, 31-32 (vocabulary, jargon, and
+  nominalizations).
+- `unslop-structure-auditor`: rules 13-19, 23-25, 27-30, 33 (syntax, pacing,
+  plain speech, active voice, and lead-first structure).
+- `unslop-soul-auditor`: the **Adding soul** checklist and a second pass over
+  rules 1, 6, 22, 27-30, 33. It must identify sterile passages, but must not
+  manufacture personal opinions or facts the author did not provide.
+
+The auditors must read the numbered rules in this file. Their assignment is a
+coverage partition, not a replacement rule set. The overlap in the last
+auditor is intentional: it is a recall check over the rules most likely to be
+lost during polishing.
+
+### 4. Merge findings into a coverage ledger
+
+The Editor Agent merges mechanical and specialist findings by location. Create
+one ledger row for every rule, even when the result is `clear`:
+
+```text
+Rule 01 | status: clear | findings: 0
+Rule 02 | status: patch | findings: 1 | lines: 14
+...
+Rule 33 | status: clear | findings: 0
+```
+
+Do not proceed while a rule is missing from the ledger. Conflicting patches are
+resolved by preserving meaning, then choosing the smallest change. Low-
+confidence findings are reviewed by the Editor Agent rather than blindly
+applied.
+
+### 5. Apply patches, then re-audit
+
+Apply accepted patches from the ledger in one editing pass. Re-run the
+mechanical gate and all specialist audits against the edited text. Stop only
+when every rule is `clear` or has an explicit, justified exception:
+
+```text
+Rule: 29
+Status: exception
+Text: "The file was deleted by the user."
+Reason: actor is intentionally unknown and the passive is materially clearer.
+```
+
+The final response reports the coverage ledger, exceptions, and any meaning or
+fact the Editor Agent declined to change. Never claim "unslopped" based only on
+the rewritten output.
 
 ## Adding soul
 
