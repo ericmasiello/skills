@@ -61,6 +61,11 @@
       "command": ["npx", "-y", "skylight-mcp"],
       "enabled": false,
       "type": "local"
+    },
+    "slack": {
+      "type": "remote",
+      "url": "https://gateway.ai-platform-sandbox.vista.io/gateways/slack/mcp",
+      "enabled": false
     }
   },
   "plugin": ["oh-my-openagent@latest", "@warp-dot-dev/opencode-warp"]
