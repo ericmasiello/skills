@@ -60,6 +60,14 @@ Use `twg help describe <path>` before any command whose exact arguments, choices
 
 All of the above run on the free tier (no Rovo Credits). Cross-product "Enriched" commands (`twg context`, `twg subgraph`, `twg collaborators`, `twg rovo search`, `twg search-code`, etc.) consume Rovo Credits — reach for `twg confluence search query` / `twg jira workitem query` first, and only use an Enriched command when the task genuinely needs cross-product graph context (e.g. "who else is touching this issue").
 
+### Crucial formatting rule for descriptions and comments
+
+`twg jira workitem create` and `twg jira workitem update` default `--description-format` to `html`. When passing Markdown text in `--description`, **always explicitly pass `--description-format markdown`**. Apply the same rule to other comment/body fields:
+- `twg jira workitem update`: pass `--comment-format markdown` or `--transition-comment-format markdown`
+- `twg jira workitem comment create`: pass `--body-format markdown`
+
+Without the explicit `markdown` format flag, Jira treats Markdown syntax as plain/HTML text and stores unrendered literal characters (e.g. `## Heading`, `- [ ]`, backticks) instead of compiling into native Atlassian Document Format (ADF) nodes.
+
 ## MCP Fallback Protocol
 
 Only needed if `twg` isn't installed/authenticated. The Rovo MCP server (`io.vista/atlassian-mcp`) is **disabled by default**.
