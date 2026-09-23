@@ -101,6 +101,7 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 - **[studio-integration-testing](./skills/studio-integration-testing/SKILL.md)**: Integration tests for hooks/components that depend on DesignEngine, providers, and complex runtime state.
 - **[studio-migrate-to-jira](./skills/studio-migrate-to-jira/SKILL.md)**: Migrate GitLab work items from the Studio project into Jira Workstreams/Tasks.
 - **[studio-rebase](./skills/studio-rebase/SKILL.md)**: Fetch and rebase onto a target branch, then resolve all merge conflicts.
+- **[studio-rewrite-human-facing-text](./skills/studio-rewrite-human-facing-text/SKILL.md)**: Audit and rewrite code comments, commented-on code, ADRs, and READMEs touched in a branch or MR using `writing-code-comments` and `unslop`.
 - **[studio-review-test-coverage](./skills/studio-review-test-coverage/SKILL.md)**: Open HTML coverage reports for Studio source files in the browser.
 - **[studio-ship-work](./skills/studio-ship-work/SKILL.md)**: Commit, push, optionally open a GitLab MR (delegating the description to `write-pr-description`), and update the source issue's status labels.
 - **[studio-worktree-zed](./skills/studio-worktree-zed/SKILL.md)**: Create a git worktree from a GitLab issue and open it in Zed.
