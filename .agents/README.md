@@ -112,5 +112,6 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 ## Personal
 
 - **[skylight-homework](./skills/skylight-homework/SKILL.md)**: Parse pasted homework schedules and create Skylight chores for each school day.
+- **[skylight-spelling-words](./skills/skylight-spelling-words/SKILL.md)**: Replace every item in a Skylight shared list (default: "Spelling Words") with a freshly pasted word list.
 - **[todoist-cli](./skills/todoist-cli/SKILL.md)**: Manage Todoist tasks, projects, labels, and filters via the `td` CLI.
 - **[ixl-weekly-checkin](./skills/ixl-weekly-checkin/SKILL.md)**: Read the kids' weekly IXL Score Chart and Diagnostic levels, flag pacing/effort anomalies, and log the row to the family's tracker sheet. Runs on demand or on an OpenChamber schedule — see the root [`README.md`](../README.md#scheduled-tasks) setup prompt.
