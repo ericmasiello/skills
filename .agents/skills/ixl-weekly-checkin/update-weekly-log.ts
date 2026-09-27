@@ -5,10 +5,27 @@
 //   "entries" — one or more raw per-skill-entry rows into a child's own tab
 //     (tab name = child name, e.g. "Hunter"/"Avery"). Columns: Date | Subject
 //     | Questions Answered | Questions Missed | Time Spent | Category
-//     (Math/ELA). Each entry is matched against existing rows by (Date,
-//     Subject) — if a row for that exact skill on that exact day already
-//     exists, only its currently-blank cells are filled in (never overwrite
-//     a value already there); otherwise a new row is appended.
+//     (Math/ELA) | Week Of. Each entry is matched against existing rows by
+//     (Date, Subject) — if a row for that exact skill on that exact day
+//     already exists, only its currently-blank cells are filled in (never
+//     overwrite a value already there); otherwise a new row is appended.
+//
+//     If the payload also includes "weekOf" (the same date used for that
+//     child's "summary" call below), this also (re)writes a "— Week Total —"
+//     row for the 7-day window ending on that date — Questions Answered /
+//     Questions Missed / Time Spent summed across every real entry in that
+//     window (Math + ELA combined), with the window's end date repeated in
+//     the new "Week Of" column so the rollup row is easy to find/filter.
+//     Unlike real entries, this rollup row is fully recomputed and
+//     overwritten every time (never fill-blanks-only) — it's a derived
+//     total, not a human-editable record, so it must always match what's
+//     actually in the tab today, even if a past entry gets hand-edited later.
+//
+//     Every call also re-sorts the whole tab by Date ascending afterward
+//     (including any prior data — this only needs to happen once for
+//     existing out-of-order rows to self-heal), so entries and rollups alike
+//     land in chronological order regardless of what order they were
+//     collected in during the check-in.
 //
 //   "summary" — one weekly row into the shared "Weekly Summary" tab (not
 //     per-child — one tab, a Child column distinguishes rows). Columns: Week
@@ -19,7 +36,7 @@
 // script twice (once per mode) to record both for a given child's week.
 //
 // Usage:
-//   node --experimental-strip-types update-weekly-log.ts '{"child":"Hunter","entries":[{"Date":"9/8/2026","Subject":"PK (D.6) Choose the letter that you hear","Category (Math/ELA)":"ELA","Questions Answered":14,"Questions Missed":0,"Time Spent":1}]}'
+//   node --experimental-strip-types update-weekly-log.ts '{"child":"Hunter","weekOf":"9/27/2026","entries":[{"Date":"9/8/2026","Subject":"PK (D.6) Choose the letter that you hear","Category (Math/ELA)":"ELA","Questions Answered":14,"Questions Missed":0,"Time Spent":1}]}'
 //   node --experimental-strip-types update-weekly-log.ts '{"summary":{"Week Of":"9/13/2026","Child":"Hunter","Math Level":320,"ELA Level":"150-230","Anomalies":"...","Notes":"..."}}'
 //
 // Environment (see .env.example):
@@ -36,6 +53,8 @@ import { GoogleSpreadsheet, type GoogleSpreadsheetWorksheet, type GoogleSpreadsh
 import { JWT } from 'google-auth-library';
 
 const WEEKLY_SUMMARY_TAB = 'Weekly Summary';
+const WEEK_TOTAL_SUBJECT = '— Week Total —';
+const WEEK_OF_COLUMN = 'Week Of';
 
 /** A single practiced-skill row for a child's raw log tab. */
 interface EntryRow {
@@ -54,6 +73,7 @@ interface SummaryRow {
 interface EntriesPayload {
   child: string;
   entries: EntryRow[];
+  weekOf?: string;
 }
 
 interface SummaryPayload {
@@ -68,6 +88,46 @@ function readSheetIdFromConfig(): string | undefined {
   if (!fs.existsSync(configPath)) return undefined;
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as { sheetId?: string };
   return config.sheetId;
+}
+
+/** Parses the sheet's "M/D/YYYY" date format. Unparseable/blank input sorts
+ * last rather than throwing, since a bad date shouldn't crash a whole-tab
+ * resort over one row. */
+function parseSheetDate(value: string): Date {
+  const parts = value.split('/').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return new Date(8640000000000000);
+  const [month, day, year] = parts;
+  return new Date(year, month - 1, day);
+}
+
+/** Ensures the tab has a "Week Of" header column (added once, self-healing —
+ * safe to call on every run even after the column already exists). Real
+ * entry rows never populate it; only writeWeeklyTotal does. */
+async function ensureWeekOfColumn(sheet: GoogleSpreadsheetWorksheet): Promise<void> {
+  await sheet.loadHeaderRow();
+  if (sheet.headerValues.includes(WEEK_OF_COLUMN)) return;
+  const newHeaders = [...sheet.headerValues, WEEK_OF_COLUMN];
+  if (newHeaders.length > sheet.columnCount) {
+    await sheet.resize({ rowCount: sheet.rowCount, columnCount: newHeaders.length });
+  }
+  await sheet.setHeaderRow(newHeaders);
+}
+
+/** Re-sorts every data row in the tab by Date ascending, rewriting the whole
+ * tab in one clear+append pass. Rows sharing a date keep their relative
+ * order (stable sort), so a same-day "— Week Total —" row added after its
+ * week's real entries stays after them. */
+async function sortSheetByDate(sheet: GoogleSpreadsheetWorksheet): Promise<void> {
+  const rows = await sheet.getRows();
+  const headers = sheet.headerValues;
+  const plainRows = rows.map((row) => {
+    const values: Record<string, string | number> = {};
+    for (const header of headers) values[header] = row.get(header) ?? '';
+    return values;
+  });
+  plainRows.sort((a, b) => parseSheetDate(String(a.Date)).getTime() - parseSheetDate(String(b.Date)).getTime());
+  await sheet.clearRows();
+  if (plainRows.length) await sheet.addRows(plainRows);
 }
 
 /** Fill only the currently-blank cells of `values` into `row`, leaving any
@@ -104,7 +164,67 @@ async function upsertByKey(
   return { appended: false, skipped };
 }
 
-async function writeEntries(doc: GoogleSpreadsheet, { child, entries }: EntriesPayload): Promise<void> {
+/** Unlike upsertByKey, always overwrites every column in `values` — for
+ * derived/computed rows (the weekly rollup) that must match today's true
+ * total, never a stale value fill-blanks-only would otherwise preserve. */
+async function upsertRecompute(
+  sheet: GoogleSpreadsheetWorksheet,
+  values: Record<string, string | number>,
+  keyColumns: string[]
+): Promise<{ appended: boolean }> {
+  const rows = await sheet.getRows();
+  const existing = rows.find((r) => keyColumns.every((col) => String(r.get(col) ?? '').trim() === String(values[col] ?? '').trim()));
+
+  if (!existing) {
+    await sheet.addRow(values);
+    return { appended: true };
+  }
+
+  existing.assign(values);
+  await existing.save();
+  return { appended: false };
+}
+
+/** Sums Questions Answered / Questions Missed / Time Spent across every real
+ * entry (excluding any prior rollup row) whose Date falls in the 7-day
+ * window ending on `weekOfStr`, then upserts (recompute, never fill-blanks)
+ * a single "— Week Total —" row carrying that sum. */
+async function writeWeeklyTotal(sheet: GoogleSpreadsheetWorksheet, child: string, weekOfStr: string): Promise<void> {
+  const weekOf = parseSheetDate(weekOfStr);
+  const weekStart = new Date(weekOf);
+  weekStart.setDate(weekStart.getDate() - 6);
+
+  const rows = await sheet.getRows();
+  let questionsAnswered = 0;
+  let questionsMissed = 0;
+  let timeSpent = 0;
+  for (const row of rows) {
+    if (String(row.get('Subject') ?? '') === WEEK_TOTAL_SUBJECT) continue;
+    const dateStr = String(row.get('Date') ?? '');
+    if (!dateStr) continue;
+    const date = parseSheetDate(dateStr);
+    if (date < weekStart || date > weekOf) continue;
+    questionsAnswered += Number(row.get('Questions Answered') || 0);
+    questionsMissed += Number(row.get('Questions Missed') || 0);
+    timeSpent += Number(row.get('Time Spent') || 0);
+  }
+
+  const values = {
+    Date: weekOfStr,
+    Subject: WEEK_TOTAL_SUBJECT,
+    'Questions Answered': questionsAnswered,
+    'Questions Missed': questionsMissed,
+    'Time Spent': timeSpent,
+    'Category (Math/ELA)': '',
+    [WEEK_OF_COLUMN]: weekOfStr,
+  };
+  const { appended } = await upsertRecompute(sheet, values, ['Date', 'Subject']);
+  console.log(
+    `${appended ? 'Appended' : 'Updated'} week total: ${child} / week of ${weekOfStr} -> ${questionsAnswered} answered, ${questionsMissed} missed, ${timeSpent} min`
+  );
+}
+
+async function writeEntries(doc: GoogleSpreadsheet, { child, entries, weekOf }: EntriesPayload): Promise<void> {
   const sheet = doc.sheetsByTitle[child];
   if (!sheet) {
     console.error(
@@ -112,6 +232,8 @@ async function writeEntries(doc: GoogleSpreadsheet, { child, entries }: EntriesP
     );
     process.exit(1);
   }
+
+  await ensureWeekOfColumn(sheet);
 
   for (const entry of entries) {
     if (!entry.Date || !entry.Subject) {
@@ -126,6 +248,12 @@ async function writeEntries(doc: GoogleSpreadsheet, { child, entries }: EntriesP
       console.log(`Updated (already existed): ${label}${skipped.length ? ` — left untouched: ${skipped.join(', ')}` : ''}`);
     }
   }
+
+  if (weekOf) {
+    await writeWeeklyTotal(sheet, child, weekOf);
+  }
+
+  await sortSheetByDate(sheet);
 }
 
 async function writeSummary(doc: GoogleSpreadsheet, { summary }: SummaryPayload): Promise<void> {
@@ -179,8 +307,12 @@ async function main(): Promise<void> {
       console.error('Payload with "entries" must also include "child".');
       process.exit(1);
     }
-    if (!Array.isArray(payload.entries) || payload.entries.length === 0) {
-      console.error('"entries" must be a non-empty array.');
+    if (!Array.isArray(payload.entries)) {
+      console.error('"entries" must be an array.');
+      process.exit(1);
+    }
+    if (payload.entries.length === 0 && !payload.weekOf) {
+      console.error('"entries" is empty and no "weekOf" was given — nothing to do.');
       process.exit(1);
     }
     await writeEntries(doc, payload as EntriesPayload);
