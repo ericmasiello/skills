@@ -17,7 +17,7 @@ Read `config.local.json` in this skill's directory. Missing? Copy `config.local.
 
 The tracker sheet has two kinds of tab, both already created — this skill never creates a tab itself:
 
-- **Each child has their own raw log tab, named exactly after them** (e.g. `Hunter`, `Avery`) — there is no shared "Weekly Log" tab for this part. One row per skill practiced per day: `Date | Subject | Questions Answered | Questions Missed | Time Spent | Category (Math/ELA)`. `Subject` is the exact skill-entry title as IXL shows it, grade/strand code included (e.g. `PK (D.6) Choose the letter that you hear`). `Time Spent` is a plain number of minutes, no unit suffix. This tab is a raw log, not a weekly rollup — a busy week means many rows.
+- **Each child has their own raw log tab, named exactly after them** (e.g. `Hunter`, `Avery`) — there is no shared "Weekly Log" tab for this part. One row per skill practiced per day: `Date | Subject | Questions Answered | Questions Missed | Time Spent | Category (Math/ELA) | Week Of`. `Subject` is the exact skill-entry title as IXL shows it, grade/strand code included (e.g. `PK (D.6) Choose the letter that you hear`). `Time Spent` is a plain number of minutes, no unit suffix. This tab is a raw log, not a weekly rollup — a busy week means many rows. `update-weekly-log.ts` keeps this tab sorted by `Date` ascending automatically (a full re-sort on every write, so out-of-order historical rows self-heal too) and appends one extra row per week — `Subject` = `— Week Total —`, `Questions Answered`/`Questions Missed`/`Time Spent` summed across every real entry that week (Math + ELA combined), `Week Of` set to that week's ending date so it's easy to find/filter. That row is always fully recomputed on write, never fill-blanks-only, since it's a derived total that must match what's actually in the tab, not a human-editable record.
 - **One shared `Weekly Summary` tab**, not per-child — a `Child` column distinguishes rows. One row per child per week: `Week Of | Child | Math Level | ELA Level | Anomalies | Notes`. This is where Diagnostic levels and the anomaly/pattern narrative live now; the raw log tabs never carry them.
 
 ## Step 1: Load the session
@@ -69,25 +69,25 @@ Classification rules (unchanged regardless of the sheet format):
 
 Two independent calls per child, via the bundled script (see its own header comment for env vars and full payload shapes). Node 24 strips the TypeScript syntax itself before running — no build step, no `ts-node`. `.nvmrc` in this directory pins Node 24; run `nvm use` here first if your shell isn't already on it.
 
-**a. Raw log — one "entries" call per child, all of that child's rows from step 2a in a single array:**
+**a. Raw log — one "entries" call per child, all of that child's rows from step 2a in a single array, plus `weekOf` set to today's date (same value used in the summary call below):**
 
 ```bash
-node update-weekly-log.ts '{"child":"<name>","entries":[{"Date":"<M/D/YYYY>","Subject":"<exact title>","Category (Math/ELA)":"<Math|ELA>","Questions Answered":<n>,"Questions Missed":<n>,"Time Spent":<minutes>}, ...]}'
+node --env-file=.env update-weekly-log.ts '{"child":"<name>","weekOf":"<M/D/YYYY, today>","entries":[{"Date":"<M/D/YYYY>","Subject":"<exact title>","Category (Math/ELA)":"<Math|ELA>","Questions Answered":<n>,"Questions Missed":<n>,"Time Spent":<minutes>}, ...]}'
 ```
 
-Each entry is matched against that child's tab by `(Date, Subject)` — a matching row already there has only its currently-blank cells filled in (never overwritten), otherwise a new row is appended. Safe to re-run: re-checking the same week twice never duplicates or clobbers a row.
+Each entry is matched against that child's tab by `(Date, Subject)` — a matching row already there has only its currently-blank cells filled in (never overwritten), otherwise a new row is appended. Safe to re-run: re-checking the same week twice never duplicates or clobbers a row. Passing `weekOf` also (re)writes that week's `— Week Total —` rollup row and re-sorts the whole tab by `Date` ascending — always include it, not just on a first run. `.env` isn't auto-loaded by Node, so every invocation needs `--env-file=.env` (or the run fails with "Missing GOOGLE_SHEETS_CREDENTIALS").
 
 **b. Weekly Summary — one "summary" call per child.** `Week Of` is today's actual date (not a normalized "Monday of the week") — that's the established convention from the old per-child tabs, carried forward:
 
 ```bash
-node update-weekly-log.ts '{"summary":{"Week Of":"<M/D/YYYY>","Child":"<name>","Math Level":<n>,"ELA Level":<n or range>,"Anomalies":"<text>","Notes":"<text>"}}'
+node --env-file=.env update-weekly-log.ts '{"summary":{"Week Of":"<M/D/YYYY>","Child":"<name>","Math Level":<n>,"ELA Level":<n or range>,"Anomalies":"<text>","Notes":"<text>"}}'
 ```
 
 Matched against the shared `Weekly Summary` tab by `(Week Of, Child)`, same fill-blanks-only, never-overwrite semantics.
 
 ## Step 4: Report
 
-There's no live pace formula in the sheet anymore — the raw log tabs are per-entry, not per-week — so compute each subject's pace for the report by aggregating rows directly: sum `Questions Answered` and `Time Spent` across this week's entries (already in hand from step 2a) for `Math` and for `ELA` separately, then `pace (sec/q) = Time Spent (min) × 60 ÷ Questions Answered`. Do the same over last week's date range by reading that child's raw tab (filter `Date` to the prior 7-day window) to get a comparison pace. **No prior week's rows for a subject at all** (first-ever run, or a subject with zero practice last week) → report this week's pace as a new baseline, nothing to compare yet, rather than a delta.
+There's no live per-subject pace formula in the sheet — the `— Week Total —` rollup row (Step 3a) combines Math + ELA into one number, so pace still needs computing by aggregating rows directly: sum `Questions Answered` and `Time Spent` across this week's entries (already in hand from step 2a) for `Math` and for `ELA` separately, then `pace (sec/q) = Time Spent (min) × 60 ÷ Questions Answered`. Do the same over last week's date range by reading that child's raw tab (filter `Date` to the prior 7-day window) to get a comparison pace. **No prior week's rows for a subject at all** (first-ever run, or a subject with zero practice last week) → report this week's pace as a new baseline, nothing to compare yet, rather than a delta. The rollup row's combined total is still useful as a sanity check — Math sum + ELA sum should equal it exactly.
 
 Per child: this week's math/ELA levels with the delta from last week (both from `Weekly Summary`), this week's Math and ELA pace each with the delta from last week's same-subject pace (computed as above) — or "new baseline" where there's nothing to compare — and any flags from step 2c/2d in plain language — read like the plan's own "when to actually step in" section, not a data dump. Then list open items below that still need Eric's attention, only when they actually apply this run.
 
@@ -97,4 +97,5 @@ Per child: this week's math/ELA levels with the delta from last week (both from 
 - **Whether a child is actually working the Recommended queue** (vs. free-browsing) is not visible in Analytics — it needs a human watching a live session. Always mention this as a standing to-do until Eric confirms it's been checked; never claim to have verified it.
 - **Diagnostic still resolving** (e.g. a firm number replacing an earlier range) → note when a value that was previously a range now has a definite number, worth flagging even outside the usual week-over-week delta.
 - **Dreading sessions / daily conflict** is explicitly out of scope for this skill's metrics per the family's plan — if the user raises it, say so plainly (pause tracking, address it directly) rather than trying to infer it from the numbers.
+- **`Time Spent` in the raw log will always undercount IXL's own "Spent … Learning" total** on the child-summary/usage pages (confirmed live: same week, same child, `Questions Answered` matched IXL's own count exactly, but summed `Active practice` minutes ran 15-18% under IXL's aggregate, with no missing Diagnostic session and no missing skill to explain it — session wall-clock windows overshoot instead, by hours in one case, so that's not the fix either). IXL's per-skill "Active practice" stat is the only subject-attributable time number exposed anywhere in Analytics, which is why this skill uses it, but it excludes time IXL still counts toward the aggregate (page transitions between skills, idle-but-not-timed-out gaps). If Eric compares this sheet's minutes against the child-summary widget and they don't match, that's expected — say so plainly rather than treating it as a data bug.
 - **Pace is now computed at report time from the raw log, not stored** — if the raw log for a prior week is ever edited or deleted by hand, that week's pace comparison silently changes too; there's no independent record of what pace was reported at the time.
