@@ -55,6 +55,7 @@ Most skills are invoked directly — this repo's setup ends at `./setup.sh`. A f
 |-------|-------|
 | [`gitlab-ci-watch`](.agents/skills/gitlab-ci-watch/SKILL.md) | A recurring OpenChamber scheduled task — see prompt below |
 | [`ixl-weekly-checkin`](.agents/skills/ixl-weekly-checkin/SKILL.md) | Its own [`SETUP.md`](.agents/skills/ixl-weekly-checkin/SETUP.md) (login bootstrap, Google service account) plus a weekly OpenChamber scheduled task — see prompt below |
+| [`ericrulez-status-sync`](.agents/skills/ericrulez-status-sync/SKILL.md) | A recurring OpenChamber scheduled task, a couple times a day — see prompt below |
 
 ### Setting up `gitlab-ci-watch`
 
@@ -75,6 +76,14 @@ Run [`SETUP.md`](.agents/skills/ixl-weekly-checkin/SETUP.md) once first — it c
 > Create an OpenChamber scheduled task named "IXL Weekly Check-In" with prompt "Run the ixl-weekly-checkin skill and report results.", weekly on Sunday, time 09:00, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `<path-to-your-clone>`.
 
 No routed/persistent-thread mode here — unlike `gitlab-ci-watch`'s every-15-minutes cadence, each Sunday's run is a fresh, self-contained session; the tracker sheet is the continuity, not a chat thread. Confirm it landed with `schedule.list`, then trigger it once manually with `schedule.run` before trusting the cron.
+
+### Setting up `ericrulez-status-sync`
+
+Requires `twg` authenticated against `vistaprint.atlassian.net` first — see [`vista-atlassian`](.agents/skills/vista-atlassian/SKILL.md). Paste this, substituting `<path-to-your-clone>`:
+
+> Create an OpenChamber scheduled task named "ERICRULEZ Status Sync" with prompt "Run the ericrulez-status-sync skill and report results.", cron schedule `0 9,17 * * *`, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `<path-to-your-clone>`.
+
+The cadence above is 9am and 5pm ET — adjust to taste. No routed/persistent-thread mode: each run is a fresh, self-contained board check, and any Jira comments the skill posts (see the skill's step 6) are the continuity across runs, not a chat thread. Confirm it landed with `schedule.list`, then trigger it once manually with `schedule.run` before trusting the cron.
 
 ## Finding a skill
 

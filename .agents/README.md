@@ -97,6 +97,7 @@ Discipline applied automatically, not invoked by name — one behavior each.
 
 Coupled to a specific employer's GitLab/Jira project — kept here deliberately (see `../docs/adr/0001-*.md`), tracked separately from the generic skills above.
 
+- **[ericrulez-status-sync](./skills/ericrulez-status-sync/SKILL.md)**: Move every non-Done ERICRULEZ ticket to the status its real work evidence supports — To Do to In Progress on a branch/commit, to In Review on an open PR/MR, to Done on a merge — asking via a push notification whenever a Done match isn't high-confidence. Built to run on an OpenChamber schedule; see the root [`README.md`](../README.md#scheduled-tasks) setup prompt.
 - **[stokowski-handoff-labels](./skills/stokowski-handoff-labels/SKILL.md)**: Apply the two Jira labels (`stokowski-ericrulez` + `workflow:eric`) that hand an ERICRULEZ ticket off to Stokowski, only for tickets Jira's own blocking relationships say are actually startable.
 - **[studio-improve-codebase-architecture](./skills/studio-improve-codebase-architecture/SKILL.md)**: Parallel architecture review of the Studio monorepo — batched sub-agents per package, HTML report, grilling loop.
 - **[studio-integration-testing](./skills/studio-integration-testing/SKILL.md)**: Integration tests for hooks/components that depend on DesignEngine, providers, and complex runtime state.
