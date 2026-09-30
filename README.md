@@ -33,7 +33,7 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 | [`td`](https://github.com/Doist/todoist-cli) (`@doist/todoist-cli`) | `todoist-cli` skill | `brew install todoist-cli` |
 | [`twg`](https://developer.atlassian.com/cloud/twg-cli/) (Teamwork Graph CLI) | `vista-atlassian` skill (Vistaprint work-context) | `curl -fsSL --retry 2 https://teamwork-graph.atlassian.com/cli/install \| bash` then `twg setup` (interactive OAuth login — can't be scripted headlessly) |
 | [`playwright-cli`](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) | Browser automation — `browser_automation_engine.provider` in `opencode/oh-my-openagent.json` is set to `playwright-cli` | `npm install -g @playwright/cli@latest` |
-| [`glab`](https://gitlab.com/gitlab-org/cli) | GitLab work — `gitlab-ci-watch`, `studio-*` skills, `address-pr-feedback` | `brew install glab` |
+| [`glab`](https://gitlab.com/gitlab-org/cli) | GitLab work — `gitlab-ci-watch`, `studio-*` skills, `address-pr-feedback`, `ericrulez-status-sync` | `brew install glab` |
 
 ## Setup
 
@@ -79,7 +79,7 @@ No routed/persistent-thread mode here — unlike `gitlab-ci-watch`'s every-15-mi
 
 ### Setting up `ericrulez-status-sync`
 
-Requires `twg` authenticated against `vistaprint.atlassian.net` first — see [`vista-atlassian`](.agents/skills/vista-atlassian/SKILL.md). Paste this, substituting `<path-to-your-clone>`:
+Requires `twg` authenticated against `vistaprint.atlassian.net` (see [`vista-atlassian`](.agents/skills/vista-atlassian/SKILL.md)) and `glab` authenticated against `gitlab.com` (see [`glab-auth-error`](.agents/skills/glab-auth-error/SKILL.md)) — the script resolves Stokowski-linked MRs' live merge state via `glab api` directly. Paste this, substituting `<path-to-your-clone>`:
 
 > Create an OpenChamber scheduled task named "ERICRULEZ Status Sync" with prompt "Run the ericrulez-status-sync skill and report results.", cron schedule `0 9,17 * * *`, timezone `America/New_York`, model `cimpress-ai-gateway/eu.anthropic.claude-sonnet-5`, directory `<path-to-your-clone>`.
 

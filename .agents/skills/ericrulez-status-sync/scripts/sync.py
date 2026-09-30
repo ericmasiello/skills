@@ -32,14 +32,30 @@ defines and owns (`Candidate`, `ClassifyResult`).
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
+import urllib.parse
 from collections.abc import Iterator
 from typing import Any, Literal, Optional, TypedDict
 
 BOT_MARKER: str = "\U0001F916 ericrulez-status-sync:"
 PROJECT_JQL: str = "project = ERICRULEZ AND statusCategory != Done AND issuetype != Epic"
+
+# Relationships pulled from the context graph. `jira_work_item_links_jira_work_item_remote_link`
+# is in this list for one reason: Stokowski-authored MRs are linked to their ticket via a
+# custom Jira remote-link app, not the native GitLab dev-panel integration, so they never
+# populate `jira_work_item_links_external_pull_request` at all -- see
+# `augment_relationships_with_stokowski_mrs` for how this gets folded back into the same
+# evidence shape the rest of `classify()` already understands.
+RELATIONSHIPS: str = (
+    "jira_work_item_links_external_pull_request,"
+    "jira_work_item_links_external_commit,"
+    "jira_work_item_links_jira_work_item_remote_link"
+)
+STOKOWSKI_MR_APP_TYPE: str = "com.stokowski.mr"
+_GITLAB_MR_URL_RE = re.compile(r"gitlab\.com/(?P<path>.+)/-/merge_requests/(?P<iid>\d+)")
 
 RANK_NO_EVIDENCE = 0
 RANK_IN_PROGRESS = 1
@@ -108,9 +124,23 @@ def chunk(lst: list[str], n: int) -> Iterator[list[str]]:
         yield lst[i : i + n]
 
 
+_key_pattern_cache: dict[str, re.Pattern[str]] = {}
+
+
 def key_lower_in(key: str, *texts: str) -> bool:
-    key_lower = key.lower()
-    return any(t and key_lower in t.lower() for t in texts)
+    """Match a ticket key against title/branch/commit text, guarding the numeric-prefix
+    collision every ERICRULEZ-<N> key is exposed to: "ERICRULEZ-1" is a literal substring
+    of "ERICRULEZ-162", "ERICRULEZ-16", and every other -1xx/-16x key, so a plain substring
+    check would credit ERICRULEZ-1 with someone else's merged MR the moment a same-prefixed
+    ticket number exists. Require the match not be immediately followed by another digit --
+    real Jira keys are always followed by a non-digit (`-`, end of string, or a letter in
+    prose) wherever they're used correctly.
+    """
+    pattern = _key_pattern_cache.get(key)
+    if pattern is None:
+        pattern = re.compile(re.escape(key) + r"(?!\d)", re.IGNORECASE)
+        _key_pattern_cache[key] = pattern
+    return any(t and pattern.search(t) for t in texts)
 
 
 def load_candidates(jql: str = PROJECT_JQL, first: int = 200) -> list[Candidate]:
@@ -186,12 +216,12 @@ def _context_items(data: dict[str, Any], keys: list[str]) -> list[tuple[str, dic
 
 
 def fetch_context_summary(keys: list[str], since: str, batch_size: int = 10) -> dict[str, list[dict[str, Any]]]:
-    """Step 3, cheap pass: which candidates have ANY linked PR/commit at all."""
+    """Step 3, cheap pass: which candidates have ANY linked PR/commit/remote-link at all."""
     results: dict[str, list[dict[str, Any]]] = {}
     for batch in chunk(keys, batch_size):
         cmd = ["context", "jira", "workitem"] + batch + [
             "--detail", "summary",
-            "--relationships", "jira_work_item_links_external_pull_request,jira_work_item_links_external_commit",
+            "--relationships", RELATIONSHIPS,
             "--since", since,
         ]
         data = run_twg(cmd)
@@ -207,7 +237,7 @@ def fetch_context_full(keys: list[str], since: str, batch_size: int = 8) -> dict
     for batch in chunk(keys, batch_size):
         cmd = ["context", "jira", "workitem"] + batch + [
             "--detail", "full",
-            "--relationships", "jira_work_item_links_external_pull_request,jira_work_item_links_external_commit",
+            "--relationships", RELATIONSHIPS,
             "--since", since,
         ]
         data = run_twg(cmd)
@@ -215,6 +245,79 @@ def fetch_context_full(keys: list[str], since: str, batch_size: int = 8) -> dict
             results[identifier] = item_data
         time.sleep(0.2)
     return results
+
+
+def parse_gitlab_mr_url(url: str) -> Optional[tuple[str, str]]:
+    match = _GITLAB_MR_URL_RE.search(url or "")
+    return (match.group("path"), match.group("iid")) if match else None
+
+
+def run_glab(args: list[str], timeout: int = 30) -> dict[str, Any]:
+    proc = subprocess.run(["glab"] + args, capture_output=True, text=True, timeout=timeout)
+    if proc.returncode != 0:
+        raise RuntimeError(f"glab {' '.join(args)} failed:\n{proc.stdout}\n{proc.stderr}")
+    return json.loads(proc.stdout)
+
+
+def fetch_gitlab_mr(url: str, cache: dict[str, Optional[dict[str, Any]]]) -> Optional[dict[str, Any]]:
+    """Resolve a Stokowski remote link's URL to the MR's live state.
+
+    The remote link's own name is a static snapshot taken when Stokowski first
+    posted it (always "Draft: ..."), so it never reflects a later merge -- the
+    only way to know current state is to ask GitLab directly. Memoized per run
+    since several candidates can share one project.
+    """
+    if url in cache:
+        return cache[url]
+    parsed = parse_gitlab_mr_url(url)
+    if not parsed:
+        cache[url] = None
+        return None
+    path, iid = parsed
+    try:
+        data = run_glab(["api", f"projects/{urllib.parse.quote(path, safe='')}/merge_requests/{iid}"])
+    except (RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+        cache[url] = None
+        return None
+    cache[url] = data
+    return data
+
+
+def augment_relationships_with_stokowski_mrs(
+    relationships: list[dict[str, Any]], glab_cache: dict[str, Optional[dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    """Fold Stokowski-linked MRs into a synthetic `jira_work_item_links_external_pull_request`
+    target so classify()'s existing exact-key gate and Done/In-Review scoring apply to them
+    unchanged -- see the confirmed live cases (ERICRULEZ-62, -162, -163) in SKILL.md's
+    "Known false positives" section for why this relationship needs live GitLab resolution
+    rather than trusting anything already on the Jira side.
+    """
+    synthesized: list[dict[str, Any]] = []
+    for r in relationships:
+        if r.get("relationshipName") != "jira_work_item_links_jira_work_item_remote_link":
+            continue
+        for target in r.get("targets", []):
+            if target.get("applicationType") != STOKOWSKI_MR_APP_TYPE or target.get("relationship") != "implemented by":
+                continue
+            mr = fetch_gitlab_mr(target.get("url", ""), glab_cache)
+            if mr is None:
+                continue
+            gitlab_state_to_pr_status = {"merged": "MERGED", "opened": "OPEN", "closed": "CLOSED"}
+            synthesized.append({
+                "title": mr.get("title", ""),
+                "status": gitlab_state_to_pr_status.get(mr.get("state", ""), mr.get("state")),
+                "sourceBranch": {"name": mr.get("source_branch", "")},
+                "url": mr.get("web_url") or target.get("url"),
+            })
+    if not synthesized:
+        return relationships
+    out = [dict(r) for r in relationships]
+    for r in out:
+        if r.get("relationshipName") == "jira_work_item_links_external_pull_request":
+            r["targets"] = r.get("targets", []) + synthesized
+            return out
+    out.append({"relationshipName": "jira_work_item_links_external_pull_request", "direction": "outbound", "targets": synthesized})
+    return out
 
 
 def classify(key: str, relationships: list[dict[str, Any]]) -> ClassifyResult:
@@ -366,10 +469,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         "errors": [],
     }
 
+    glab_cache: dict[str, Optional[dict[str, Any]]] = {}
     for key in keys:
         current = cand_by_key[key]
         current_rank = rank_of(current["status"], current["status_category_key"])
         rels: list[dict[str, Any]] = full.get(key, {}).get("relationships", [])
+        rels = augment_relationships_with_stokowski_mrs(rels, glab_cache)
         if not rels:
             continue
 
