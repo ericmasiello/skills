@@ -70,10 +70,15 @@ class ClassifyResult(TypedDict):
 def run_twg(args: list[str], timeout: int = 180) -> dict[str, Any]:
     """Run `twg <args> -o json`, return the parsed JSON body.
 
-    twg writes its actual JSON payload to a temp file and prints that file's
-    path on a `stdout: "<path>"` line (plus a lot of other diagnostic YAML) --
-    there is no plain-JSON-to-stdout mode, so every caller needs this same
-    two-step "run, find the path, read the file" dance.
+    For larger payloads (e.g. `workitem query`), twg writes the JSON to a temp
+    file and prints that file's path on a `stdout: "<path>"` line inside a
+    diagnostic YAML block -- so this reads the pointer and loads the file.
+    For small payloads (confirmed for `workitem transition --id` discovery,
+    the read-only "list available transitions" mode) twg instead prints the
+    JSON body directly to stdout with no wrapper at all. Both are handled
+    here rather than assuming one shape per SKILL.md's "fix the script"
+    guidance -- if a third shape shows up, extend this, don't work around it
+    in a single call site.
     """
     cmd = ["twg"] + args
     if "-o" not in args:
@@ -87,10 +92,15 @@ def run_twg(args: list[str], timeout: int = 180) -> dict[str, Any]:
         if line.startswith("stdout:"):
             stdout_path = line.split("stdout:", 1)[1].strip().strip('"')
             break
-    if not stdout_path:
-        raise RuntimeError(f"twg {' '.join(args)}: no stdout path in output:\n{proc.stdout[:1000]}")
-    with open(stdout_path) as f:
-        return json.load(f)
+    if stdout_path:
+        with open(stdout_path) as f:
+            return json.load(f)
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(
+            f"twg {' '.join(args)}: no stdout path and body isn't plain JSON either:\n{proc.stdout[:1000]}"
+        )
 
 
 def chunk(lst: list[str], n: int) -> Iterator[list[str]]:
