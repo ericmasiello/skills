@@ -124,9 +124,23 @@ def chunk(lst: list[str], n: int) -> Iterator[list[str]]:
         yield lst[i : i + n]
 
 
+_key_pattern_cache: dict[str, re.Pattern[str]] = {}
+
+
 def key_lower_in(key: str, *texts: str) -> bool:
-    key_lower = key.lower()
-    return any(t and key_lower in t.lower() for t in texts)
+    """Match a ticket key against title/branch/commit text, guarding the numeric-prefix
+    collision every ERICRULEZ-<N> key is exposed to: "ERICRULEZ-1" is a literal substring
+    of "ERICRULEZ-162", "ERICRULEZ-16", and every other -1xx/-16x key, so a plain substring
+    check would credit ERICRULEZ-1 with someone else's merged MR the moment a same-prefixed
+    ticket number exists. Require the match not be immediately followed by another digit --
+    real Jira keys are always followed by a non-digit (`-`, end of string, or a letter in
+    prose) wherever they're used correctly.
+    """
+    pattern = _key_pattern_cache.get(key)
+    if pattern is None:
+        pattern = re.compile(re.escape(key) + r"(?!\d)", re.IGNORECASE)
+        _key_pattern_cache[key] = pattern
+    return any(t and pattern.search(t) for t in texts)
 
 
 def load_candidates(jql: str = PROJECT_JQL, first: int = 200) -> list[Candidate]:
