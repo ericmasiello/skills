@@ -1,5 +1,5 @@
 ---
-name: skylight-spelling-words
+name: skylight-spelling-lessons
 description: "Replace every item in a Skylight shared list (default: 'Spelling Words') with a freshly pasted word list, or advance it to the next lesson in a bundled spelling-lesson sequence. Use when the user pastes this week's spelling words, says 'update the spelling words list', 'replace the spelling list on skylight', 'add this week's spelling words to skylight', names a Skylight list and gives the words that should replace its contents, or says 'update to next list', 'advance to the next spelling list', or 'move to the next lesson'."
 ---
 
