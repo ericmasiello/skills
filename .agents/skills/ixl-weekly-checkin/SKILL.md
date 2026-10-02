@@ -5,11 +5,7 @@ description: "Run the kids' Sunday IXL check-in: pull each child's weekly practi
 
 # IXL Weekly Check-In
 
-Runs the family's IXL growth-mindset routine end to end: pull this week's numbers for each child, compare to last week, flag what needs a human look, and write the row. Read config, never the plan doc's rules — those are settled; this skill only automates collecting and recording data against them. First run ever, or session gone stale? See [SETUP.md](SETUP.md) — don't attempt any of the steps below cold.
-
-## A known, accepted risk
-
-IXL's ToS prohibits automated extraction of Service content, full stop — there is no personal-use carve-out and no public API. This skill reads the Usage Details, Score Chart, and Diagnostic pages directly off the rendered page rather than through any export. That was a deliberate choice: the Score Chart's own export control only produces a PDF, and scripting around it failed outright the one time this skill tried (see git history on this file). Reading the small, already-filtered views below was judged the more reliable path, in exchange for sitting closer to what the ToS clause is written against. If IXL's export ever becomes reliably scriptable, revisit this.
+Runs the family's IXL growth-mindset routine end to end: pull this week's numbers for each child, compare to last week, flag what needs a human look, and write the row. Read config, never the plan doc's rules — those are settled; this skill only automates collecting and recording data against them. First run ever? See [SETUP.md](SETUP.md) — don't attempt any of the steps below cold.
 
 ## Config
 
@@ -20,59 +16,46 @@ The tracker sheet has two kinds of tab, both already created — this skill neve
 - **Each child has their own raw log tab, named exactly after them** (e.g. `Hunter`, `Avery`) — there is no shared "Weekly Log" tab for this part. One row per skill practiced per day: `Date | Subject | Questions Answered | Questions Missed | Time Spent | Category (Math/ELA) | Week Of`. `Subject` is the exact skill-entry title as IXL shows it, grade/strand code included (e.g. `PK (D.6) Choose the letter that you hear`). `Time Spent` is a plain number of minutes, no unit suffix. This tab is a raw log, not a weekly rollup — a busy week means many rows. `update-weekly-log.ts` keeps this tab sorted by `Date` ascending automatically (a full re-sort on every write, so out-of-order historical rows self-heal too) and appends one extra row per week — `Subject` = `— Week Total —`, `Questions Answered`/`Questions Missed`/`Time Spent` summed across every real entry that week (Math + ELA combined), `Week Of` set to that week's ending date so it's easy to find/filter. That row is always fully recomputed on write, never fill-blanks-only, since it's a derived total that must match what's actually in the tab, not a human-editable record.
 - **One shared `Weekly Summary` tab**, not per-child — a `Child` column distinguishes rows. One row per child per week: `Week Of | Child | Math Level | ELA Level | Anomalies | Notes`. This is where Diagnostic levels and the anomaly/pattern narrative live now; the raw log tabs never carry them.
 
-## Step 1: Load the session
+## Step 1: Collect this week's data
 
 ```bash
-playwright-cli state-load ixl-auth.local.json
-playwright-cli open https://www.ixl.com/analytics/child-summary --browser=chrome --persistent --headed
+nvm use   # picks up the .nvmrc here if your shell isn't already on Node 24+
+node --env-file=.env collect-weekly-data.ts <child>
 ```
 
-If that lands on a login/signin page instead of Analytics:
+Run once per name in `config.local.json`. No browser, no saved session to load — the script logs into IXL fresh every run (the 3-request flow documented in `ixl-client.ts`) using `IXL_EMAIL`, `IXL_PASSWORD`, and `IXL_PARENT_PASSWORD` from `.env`, all three required. Default window is the trailing 7 days ending today; pass `--start=YYYY-MM-DD --end=YYYY-MM-DD` to cover a different range (e.g. catching up on a missed week).
 
-- `IXL_EMAIL`, `IXL_PASSWORD`, and `IXL_PARENT_PASSWORD` all set (see `.env`) → log in fully, three steps, not one:
-  1. Fill and submit the username/password form (use `playwright-cli snapshot` first — don't guess selectors).
-  2. A "Welcome — Who are you?" modal appears next — this is expected, not an error. Select the **Parent** option (the radio input itself is usually intercepted by its own avatar overlay; `playwright-cli eval "(el) => el.click()" <ref>` on the avatar element reliably gets past that, a plain `click` often won't).
-  3. That reveals an **"Enter secret word"** field — IXL's term for the separate parent passphrase, distinct from the account password. Fill it from `IXL_PARENT_PASSWORD` and submit. Landing on `/dashboard` confirms success.
-  Then `playwright-cli state-save ixl-auth.local.json` to refresh the stored session, and continue.
-- Any of the three is unset, or the flow demands 2FA/a challenge the fill can't clear → stop here. Report: "IXL session expired and no auto-login is configured — run the bootstrap login in SETUP.md, then re-run this check." Don't retry blindly and don't guess at a workaround.
+The script prints one JSON object: `entries` (one row per skill practiced, Math/ELA already split by the server, same-day duplicate sessions already merged, Diagnostic sessions already excluded — this is Step 3a's payload, ready as-is) and `diagnostic` (this week's `Math`/`ELA` overall levels, either a firm number or an `"min-max"` range string if the diagnostic is still resolving).
 
-## Step 2: Per child (repeat for every name in `config.local.json`)
+If the script throws instead of printing JSON — wrong secret word, IXL demands a CAPTCHA/2FA challenge, or `/signin`'s page markup changed — stop here and report the error message plainly. Don't retry blindly and don't guess at a workaround; there's no UI fallback anymore, so a login failure means a human needs to check the account directly.
 
-**a. One row per skill entry — from the "Sessions and skills" log, not the headline widget.** Navigate to `https://www.ixl.com/analytics/student-usage`. Select this child. Its filter bar defaults to `Subject: All subjects`, `SKILL GRADES: Pre-K - 12`, and `DATE RANGE: Last 7 days` — leave all three as-is; this is deliberately the broadest view, not a mistake to narrow down. If the page loads with an empty body, click the `DATE RANGE` button once (re-selecting the same value) to force the render — a known quirk on first load. The page-top "In the last 7 days, `<child>` has..." block is **all-subjects only** — confirmed live, switching its Subject filter doesn't change those numbers at all — so it's not a source for anything below; ignore it.
+## Step 2: Per child — anomaly scan and classification
 
-Scroll to the **"Sessions and skills"** section instead: every practice session for the week, grouped by day, each showing its own header (`"N skills practiced: M questions"`, or a `Diagnostic:` line, or both combined on one line), then per skill, its own titled block: a grade/strand code + skill name as the title (this exact title string is what goes in `Subject`, code included — e.g. `PK (D.6) Choose the letter that you hear`), then a row of stats: `Active practice: <time>`, `Questions answered: N`, `Questions missed: N`, `SmartScore progress: X→Y`. Every field this tab needs is on that stats row directly — no separate lookup required. For each entry, write one row (`update-weekly-log.ts` "entries" call, see Step 3) with:
+**a. Decide which grade(s) to check**, same judgment call as always: read the `diagnostic` levels Step 1 just returned and infer the right grade per subject (e.g. a Math level around 230 reads as roughly 2nd grade). This is still a best-effort, one-grade-per-subject check, not exhaustive — say so in this child's `Weekly Summary` Notes.
 
-- `Date`: the day-group header this entry sits under (not today's date — the actual date the skill was practiced).
-- `Subject`: the entry's title exactly as shown, code and name together.
-- `Questions Answered` / `Questions Missed`: read straight off the stats row.
-- `Time Spent`: `Active practice: <time>` converted to a plain number of minutes (e.g. `Active practice: 7 min` → `7`). **`<1 min` entries**: no finer precision is available from IXL — write `0.5`.
-- `Category (Math/ELA)`: classified per the rules below.
+**b. Re-run the collector with `--grades`** to pull the Score Chart data for those grades:
 
-Classification rules (unchanged regardless of the sheet format):
+```bash
+node --env-file=.env collect-weekly-data.ts <child> --grades=math:<N>,ela:<M>
+```
 
-- **Classify Math vs ELA mostly from the skill name** — usually unambiguous from the content ("Find the area of rectangles" is Math, "Form compound words" is ELA). **When a name is ambiguous — anything reasoning/logic-flavored, e.g. "Identify hypotheses and conclusions"** — don't guess from the title alone: open the "QUESTIONS LOG PREVIEW" shown right under that entry (or its "View details"/"View all N questions" link) and read one actual question. A skill about solving `2x + 1 = 7` is Math no matter how ELA-ish its name reads. Live-verified: this exact skill got misclassified once already — see git history on this file.
-- **The grade/strand code prefix is itself a classification signal, not just decoration.** Numbered grades and `PK`/`K` (`2nd (T.2)`, `PK (E.5)`) say nothing about subject on their own. But a **course-name prefix** — `G` (Geometry), `Alg 1`, `Alg 2`, `Precalc`, `Calc` — only ever appears on Math skills; treat it as a strong Math signal, especially useful for exactly the reasoning/logic skills the previous bullet flags.
-- **Real-Time Diagnostic entries** (labeled `Diagnostic: N questions`, tagged `subjects=["math","ELA"]` in their link) are a different activity — assessment, not practice — and don't cleanly split by subject or fit this tab's one-`Category`-per-row shape. Exclude them from the raw log entirely; if diagnostic time was substantial this week, mention it in this child's `Weekly Summary` Notes instead of silently dropping it.
-- **Check your own tally against the session's own header before moving to the next day.** Each header states its own total (`"6 skills practiced: 86 questions"`) — the entries you're about to write for that day must sum to it exactly (excluding any Diagnostic line, which is separate). If it doesn't, you've missed or double-counted an entry in *that* session specifically — go recount it right there rather than trusting a mismatched running total and hoping it comes out even later. This one check is what catches both a missed entry and a misclassified one before they reach the sheet.
-- **Same skill practiced twice on the same day, in two different session groups → merge into one row before writing.** `(Date, Subject)` is the row's identity in the raw log; the sheet has no session/time-of-day column to keep two same-day sessions apart. Sum `Questions Answered`, `Questions Missed`, and `Time Spent` across the sessions for that skill. Live-verified: hit this exact case (a letter-recognition skill practiced in two separate morning/afternoon sessions the same day).
+This adds a `scoreChart` object to the output: `scoreChart.math.skills` / `scoreChart.ela.skills`, each an array of every skill at that grade actually practiced in the window (`skillName`, `smartScore`, `questionsAnswered`, `timeSpentMinutes`, `lastPracticed`) — the live equivalent of the Score Chart's own `Skill | Smartscore | Questions answered | Time Spent | Last practiced` table, already filtered to "Practiced skills" by the script.
 
-**b. Anomaly scan — from the Score Chart, best-effort, not exhaustive.** Navigate to `https://www.ixl.com/analytics/score-grid#grades=<this child's official grade, e.g. 2>`. Click `DATE RANGE:...` then **"Last 7 days"** in the panel that appears (a real click-through, not a native `<select>` — a snapshot right after confirms it). The nested `Subject:`/`Grade:` selector inside the Score Chart panel and the **"Practiced skills"** checkbox both **reset on every fresh page load** and are frequently intercepted by a stray overlay when clicked normally — use `playwright-cli eval "(el) => el.click()" <ref>` for both instead of a plain `click`, which reliably bypasses it. Leave **"Currently suggested skills"** unchecked — that only shows skills a parent starred, unrelated to what was actually practiced. With `Subject: Math`, "Last 7 days", and "Practiced skills" checked, `playwright-cli snapshot` shows a small table grouped by strand heading, columns **Skill | Smartscore | Questions answered | Time Spent | Last practiced**. Repeat once with `Subject: English language arts` at the same grade. **This only covers one grade level per subject — it is not exhaustive** (a child working ahead may have practiced skills at other grades this check won't see); say so plainly in this child's `Weekly Summary` Notes rather than implying full coverage.
-
-**c. Scan for the two flag patterns** across whatever rows step 2b found (judgment call, same as a human doing this by hand — there's no fixed numeric threshold, the plan deliberately leaves this to read-in-context). Write the result into this child's `Weekly Summary` `Anomalies` cell for this week.
+**c. Scan for the two flag patterns** across those arrays (judgment call, same as a human doing this by hand — there's no fixed numeric threshold, the plan deliberately leaves this to read-in-context). Write the result into this child's `Weekly Summary` `Anomalies` cell for this week.
    - High SmartScore + very few questions + almost no time → likely **gaming** (blitzing something already mastered).
    - Low SmartScore + normal pace → likely **genuine struggle**, a signal, not a problem — don't word this like a failure.
    - Low SmartScore + also low effort (a couple of questions, under a minute) fits neither cleanly — call it out as its own pattern (rushed/low-focus) rather than forcing it into one of the two above.
 
-**d. Diagnostic levels.** Navigate to `https://www.ixl.com/diagnostic`, confirm it lands on `/diagnostic/student-stats` for this child (switch the `Child` selector if it's showing the wrong one). **The two level numbers render as chart labels, not accessible text** — a `snapshot` won't surface them. Instead: `playwright-cli screenshot --filename <path> --full-page`, then read that image (a multimodal look, not OCR-by-hand) for **"Overall math level"** and **"Overall language arts level"**. These go into this child's `Weekly Summary` `Math Level` / `ELA Level` cells for this week. Compare each to this child's most recent prior row in `Weekly Summary` (filter that tab by `Child`). A level dropping two weeks running is itself a flag — surface it, but say explicitly it may be one strand catching up rather than a real regression (see "Open gaps" below).
+**d. Diagnostic levels** are already in hand from Step 1's `diagnostic` field — no separate lookup. Compare each to this child's most recent prior row in `Weekly Summary` (filter that tab by `Child`). A level dropping two weeks running is itself a flag — surface it, but say explicitly it may be one strand catching up rather than a real regression (see "Open gaps" below). A value that was a `"min-max"` range last week and is now a firm number (or a range whose bounds moved) is also worth naming, even outside the usual week-over-week delta.
 
 ## Step 3: Write the rows
 
-Two independent calls per child, via the bundled script (see its own header comment for env vars and full payload shapes). Node 24 strips the TypeScript syntax itself before running — no build step, no `ts-node`. `.nvmrc` in this directory pins Node 24; run `nvm use` here first if your shell isn't already on it.
+Two independent calls per child, via the bundled script (see its own header comment for env vars and full payload shapes).
 
-**a. Raw log — one "entries" call per child, all of that child's rows from step 2a in a single array, plus `weekOf` set to today's date (same value used in the summary call below):**
+**a. Raw log — one "entries" call per child, Step 1's `entries` array as-is, plus `weekOf` set to today's date (same value used in the summary call below):**
 
 ```bash
-node --env-file=.env update-weekly-log.ts '{"child":"<name>","weekOf":"<M/D/YYYY, today>","entries":[{"Date":"<M/D/YYYY>","Subject":"<exact title>","Category (Math/ELA)":"<Math|ELA>","Questions Answered":<n>,"Questions Missed":<n>,"Time Spent":<minutes>}, ...]}'
+node --env-file=.env update-weekly-log.ts '{"child":"<name>","weekOf":"<M/D/YYYY, today>","entries":<Step 1's entries array>}'
 ```
 
 Each entry is matched against that child's tab by `(Date, Subject)` — a matching row already there has only its currently-blank cells filled in (never overwritten), otherwise a new row is appended. Safe to re-run: re-checking the same week twice never duplicates or clobbers a row. Passing `weekOf` also (re)writes that week's `— Week Total —` rollup row and re-sorts the whole tab by `Date` ascending — always include it, not just on a first run. `.env` isn't auto-loaded by Node, so every invocation needs `--env-file=.env` (or the run fails with "Missing GOOGLE_SHEETS_CREDENTIALS").
@@ -80,22 +63,27 @@ Each entry is matched against that child's tab by `(Date, Subject)` — a matchi
 **b. Weekly Summary — one "summary" call per child.** `Week Of` is today's actual date (not a normalized "Monday of the week") — that's the established convention from the old per-child tabs, carried forward:
 
 ```bash
-node --env-file=.env update-weekly-log.ts '{"summary":{"Week Of":"<M/D/YYYY>","Child":"<name>","Math Level":<n>,"ELA Level":<n or range>,"Anomalies":"<text>","Notes":"<text>"}}'
+node --env-file=.env update-weekly-log.ts '{"summary":{"Week Of":"<M/D/YYYY>","Child":"<name>","Math Level":<from Step 1's diagnostic.math>,"ELA Level":<from Step 1's diagnostic.ela>,"Anomalies":"<text from Step 2c>","Notes":"<text>"}}'
 ```
 
 Matched against the shared `Weekly Summary` tab by `(Week Of, Child)`, same fill-blanks-only, never-overwrite semantics.
 
 ## Step 4: Report
 
-There's no live per-subject pace formula in the sheet — the `— Week Total —` rollup row (Step 3a) combines Math + ELA into one number, so pace still needs computing by aggregating rows directly: sum `Questions Answered` and `Time Spent` across this week's entries (already in hand from step 2a) for `Math` and for `ELA` separately, then `pace (sec/q) = Time Spent (min) × 60 ÷ Questions Answered`. Do the same over last week's date range by reading that child's raw tab (filter `Date` to the prior 7-day window) to get a comparison pace. **No prior week's rows for a subject at all** (first-ever run, or a subject with zero practice last week) → report this week's pace as a new baseline, nothing to compare yet, rather than a delta. The rollup row's combined total is still useful as a sanity check — Math sum + ELA sum should equal it exactly.
+There's no live per-subject pace formula in the sheet — the `— Week Total —` rollup row (Step 3a) combines Math + ELA into one number, so pace still needs computing by aggregating rows directly: sum `Questions Answered` and `Time Spent` across this week's entries (already in hand from Step 1) for `Math` and for `ELA` separately, then `pace (sec/q) = Time Spent (min) × 60 ÷ Questions Answered`. Do the same over last week's date range by reading that child's raw tab (filter `Date` to the prior 7-day window) to get a comparison pace. **No prior week's rows for a subject at all** (first-ever run, or a subject with zero practice last week) → report this week's pace as a new baseline, nothing to compare yet, rather than a delta. The rollup row's combined total is still useful as a sanity check — Math sum + ELA sum should equal it exactly.
 
-Per child: this week's math/ELA levels with the delta from last week (both from `Weekly Summary`), this week's Math and ELA pace each with the delta from last week's same-subject pace (computed as above) — or "new baseline" where there's nothing to compare — and any flags from step 2c/2d in plain language — read like the plan's own "when to actually step in" section, not a data dump. Then list open items below that still need Eric's attention, only when they actually apply this run.
+Per child: this week's math/ELA levels with the delta from last week (both from `Weekly Summary`), this week's Math and ELA pace each with the delta from last week's same-subject pace (computed as above) — or "new baseline" where there's nothing to compare — and any flags from Step 2c/2d in plain language — read like the plan's own "when to actually step in" section, not a data dump. Then list open items below that still need Eric's attention, only when they actually apply this run.
+
+## Validating this skill's own accuracy
+
+`validate-against-sheet.ts` (no args, same `.env`) re-derives every raw-log row from IXL going back to the earliest Date already in each child's tab and diffs it against what's actually recorded — a standing self-check, not part of the weekly flow itself. Last run: 146/146 historical rows matched exactly across both kids.
 
 ## Open gaps this skill surfaces, never silently resolves
 
-- **The Score Chart anomaly scan only covers one grade per subject** (step 2b) — always name which grade(s) were actually checked in this child's `Weekly Summary` Notes, so a clean-looking report isn't mistaken for a full sweep.
+- **The Score Chart anomaly scan only covers one grade per subject** (Step 2b) — always name which grade(s) were actually checked in this child's `Weekly Summary` Notes, so a clean-looking report isn't mistaken for a full sweep.
 - **Whether a child is actually working the Recommended queue** (vs. free-browsing) is not visible in Analytics — it needs a human watching a live session. Always mention this as a standing to-do until Eric confirms it's been checked; never claim to have verified it.
-- **Diagnostic still resolving** (e.g. a firm number replacing an earlier range) → note when a value that was previously a range now has a definite number, worth flagging even outside the usual week-over-week delta.
+- **Diagnostic still resolving** — a `"min-max"` range narrowing to a firm number, or its bounds simply moving week to week, is worth flagging even outside the usual week-over-week delta.
 - **Dreading sessions / daily conflict** is explicitly out of scope for this skill's metrics per the family's plan — if the user raises it, say so plainly (pause tracking, address it directly) rather than trying to infer it from the numbers.
-- **`Time Spent` in the raw log will always undercount IXL's own "Spent … Learning" total** on the child-summary/usage pages (confirmed live: same week, same child, `Questions Answered` matched IXL's own count exactly, but summed `Active practice` minutes ran 15-18% under IXL's aggregate, with no missing Diagnostic session and no missing skill to explain it — session wall-clock windows overshoot instead, by hours in one case, so that's not the fix either). IXL's per-skill "Active practice" stat is the only subject-attributable time number exposed anywhere in Analytics, which is why this skill uses it, but it excludes time IXL still counts toward the aggregate (page transitions between skills, idle-but-not-timed-out gaps). If Eric compares this sheet's minutes against the child-summary widget and they don't match, that's expected — say so plainly rather than treating it as a data bug.
+- **`Time Spent` in the raw log will always undercount IXL's own "Spent … Learning" total** on the child-summary/usage pages (confirmed live: same week, same child, `Questions Answered` matched IXL's own count exactly, but summed `Active practice` minutes ran 15-18% under IXL's aggregate, with no missing Diagnostic session and no missing skill to explain it — session wall-clock windows overshoot instead, by hours in one case, so that's not the fix either). IXL's per-skill "Active practice" stat (via `secondsSpent` on the usage endpoint) is the only subject-attributable time number exposed anywhere in Analytics, which is why this skill uses it, but it excludes time IXL still counts toward the aggregate (page transitions between skills, idle-but-not-timed-out gaps). If Eric compares this sheet's minutes against the child-summary widget and they don't match, that's expected — say so plainly rather than treating it as a data bug.
 - **Pace is now computed at report time from the raw log, not stored** — if the raw log for a prior week is ever edited or deleted by hand, that week's pace comparison silently changes too; there's no independent record of what pace was reported at the time.
+- **No UI fallback if the fetch-only login breaks** (IXL changes its login page, adds a CAPTCHA, etc.) — Step 1 stops with an actionable error instead of guessing; a human needs to check the account directly until the script is updated.

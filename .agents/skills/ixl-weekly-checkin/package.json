@@ -7,7 +7,9 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "node --experimental-strip-types update-weekly-log.ts",
+    "collect": "node --experimental-strip-types collect-weekly-data.ts",
+    "update": "node --experimental-strip-types update-weekly-log.ts",
+    "validate": "node --experimental-strip-types validate-against-sheet.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
