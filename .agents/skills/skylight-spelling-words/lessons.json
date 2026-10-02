@@ -1,0 +1,31 @@
+{
+  "source": "https://drive.google.com/file/d/11NBRJdkEu7Lu6Yk-VD-SKPkqlnWsgjB2/view",
+  "sourceNote": "Amplify CKLA Grade 2 Skills Spelling Lists PDF. Extracted via PyMuPDF text extraction on 2026-10-02. Order below is exact document reading order: row-major by Skill (ascending), then Lesson (ascending) within each Skill row. This is a one-time snapshot — re-parse only if the source PDF changes.",
+  "lessons": [
+    { "skill": 1, "lesson": 15, "words": ["box", "picnic", "wish", "bandit", "think", "shelf", "sprang", "drift", "munch", "Tricky Word: she"] },
+    { "skill": 1, "lesson": 20, "words": ["hitting", "running", "mixing", "problem", "smelling", "buzzing", "snacking", "kissing", "until", "Tricky Word: how"] },
+    { "skill": 1, "lesson": 22, "words": ["sand", "sang", "sank", "hunt", "hung", "hunk", "thin", "thing", "think", "Tricky Word: should"] },
+    { "skill": 2, "lesson": 5, "words": ["yelled", "yanked", "slumped", "limped", "plopped", "smiled", "shrugged", "liked", "patted", "Tricky Word: you"] },
+    { "skill": 2, "lesson": 10, "words": ["smiling", "racing", "hoping", "baking", "inviting", "confusing", "tasting", "competing", "hopping", "Tricky Word: were"] },
+    { "skill": 2, "lesson": 15, "words": ["it\u2019s", "that\u2019s", "she\u2019s", "isn\u2019t", "aren\u2019t", "wasn\u2019t", "I\u2019ll", "you\u2019ll", "she\u2019ll", "Tricky Word: their"] },
+    { "skill": 3, "lesson": 5, "words": ["sister", "letter", "expert", "born", "sports", "short", "mark", "started", "backyard", "Tricky Word: some"] },
+    { "skill": 3, "lesson": 10, "words": ["germ", "page", "gray", "digit", "carpet", "face", "cell", "space", "center", "Tricky Word: are"] },
+    { "skill": 3, "lesson": 15, "words": ["knotted", "knitting", "knocked", "wringing", "wronged", "whipped", "whined", "quitting", "quacked", "Tricky Word: all"] },
+    { "skill": 3, "lesson": 20, "words": ["under", "noise", "open", "brave", "cute", "minus", "last", "foe", "robber", "road"] },
+    { "skill": 4, "lesson": 5, "words": ["moon", "yawn", "spoiled", "hawk", "spool", "oil", "destroy", "crawl", "cartoon", "causes", "enjoy", "vault", "cowboy", "coin", "haunted"] },
+    { "skill": 4, "lesson": 10, "words": ["stir", "fur", "nerve", "car", "bird", "store", "shirt", "serve", "turn", "bar", "girl", "chore", "purse", "hurt"] },
+    { "skill": 4, "lesson": 15, "words": ["meow", "below", "growling", "yellow", "arrow", "plow", "snow", "powder", "elbow", "shower", "sorrow", "rainbow", "flowers", "chow", "Tricky Word: your"] },
+    { "skill": 4, "lesson": 20, "words": ["week", "she", "wheat", "we", "zero", "complete", "meal", "meeting", "squeak", "creek", "fever", "seal", "eve", "pretend", "Tricky Word: people"] },
+    { "skill": 5, "lesson": 5, "words": ["mommy", "daddy", "happy", "angry", "chilly", "pretty", "grumpy", "jelly", "empty", "quickly", "neatly", "ugly", "slowly", "funny", "Tricky Word: alphabet"] },
+    { "skill": 5, "lesson": 10, "words": ["bright", "might", "high", "frightened", "knight", "pry", "why", "light", "nearby", "trying", "sky", "drying", "right", "crying", "Tricky Word: kingdom"] },
+    { "skill": 5, "lesson": 15, "words": ["relief", "movie", "field", "ladies", "kitties", "piece", "shield", "yield", "cookies", "thief", "niece", "grief", "babies", "achieve", "Tricky Word: water"] },
+    { "skill": 5, "lesson": 20, "words": ["energy", "yelled", "system", "frying", "yarn", "yellow", "yes", "myth", "cry", "satisfy", "yawn", "sticky", "lying", "symbol", "Tricky Word: edge"] },
+    { "skill": 5, "lesson": 25, "words": ["question", "turtle", "label", "inspection", "bundle", "angel", "motion", "pickle", "gravel", "education", "shuffle", "jewel", "cattle", "fiction", "Tricky Word: schwa"] },
+    { "skill": 6, "lesson": 5, "words": ["traffic", "noise", "finish", "night", "graph", "kneel", "dolphin", "wrinkle", "photo", "ripple", "margin", "ferret", "gentle", "whistle", "ginger", "window", "jolly", "western", "jungle", "Tricky Word: Britain"] },
+    { "skill": 6, "lesson": 10, "words": ["perform", "after", "chirping", "informer", "barber", "parcel", "burden", "furnace", "camera", "organize", "turtle", "difference", "ramparts", "safari", "thirteen", "birthday", "marker", "swirling", "hamburger", "Tricky Word: war"] },
+    { "skill": 6, "lesson": 15, "words": ["caption", "revenge", "locomotion", "nation", "cottage", "attention", "huge", "range", "stations", "fraction", "fudge", "addition", "nudge", "option", "judge", "action", "large", "change", "direction", "Tricky Word: Europe"] },
+    { "skill": 6, "lesson": 20, "words": ["painting", "navy", "Madison", "troops", "hawks", "impressment", "Washington", "support", "paved", "monarchy", "president", "march", "merchants", "Dolley", "battle", "Congress", "death", "cannon", "British", "Tricky Word: ironsides"] },
+    { "skill": 6, "lesson": 25, "words": ["rockets", "fifteen", "White House", "poem", "port", "flag", "dawn", "commander", "harbor", "construct", "anthem", "McHenry", "brave", "burned", "stripes", "ship", "stitching", "ransacked", "giant", "Tricky Word: bomb"] },
+    { "skill": 6, "lesson": 30, "words": ["Mississippi", "general", "mortar", "traders", "soldiers", "fired", "orphan", "ragtag", "proud", "drains", "knotty", "streak", "highways", "treaty", "goods", "defend", "river", "hickory", "peace", "Tricky Word: New Orleans"] }
+  ]
+}
