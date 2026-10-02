@@ -34,6 +34,7 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 | [`twg`](https://developer.atlassian.com/cloud/twg-cli/) (Teamwork Graph CLI) | `vista-atlassian` skill (Vistaprint work-context) | `curl -fsSL --retry 2 https://teamwork-graph.atlassian.com/cli/install \| bash` then `twg setup` (interactive OAuth login — can't be scripted headlessly) |
 | [`playwright-cli`](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) | Browser automation — `browser_automation_engine.provider` in `opencode/oh-my-openagent.json` is set to `playwright-cli` | `npm install -g @playwright/cli@latest` |
 | [`glab`](https://gitlab.com/gitlab-org/cli) | GitLab work — `gitlab-ci-watch`, `studio-*` skills, `address-pr-feedback`, `ericrulez-status-sync` | `brew install glab` |
+| [`stok`](https://gitlab.com/vistaprint-org/vista-engineering/engineering-productivity/ci-cd/remote-agents/stokowski-cli) (`@vp/stokowski-cli`) | `stokowski-cli` skill (Vistaprint work-context) | `npm install --global @vp/stokowski-cli --registry https://vistaprint.jfrog.io/vistaprint/api/npm/npm/` then `stok login` (Cimpress SSO — can't be scripted headlessly) |
 
 ## Setup
 
