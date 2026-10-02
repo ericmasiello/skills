@@ -99,6 +99,7 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 
 - **[ericrulez-status-sync](./skills/ericrulez-status-sync/SKILL.md)**: Move every non-Done ERICRULEZ ticket to the status its real work evidence supports — To Do to In Progress on a branch/commit, to In Review on an open PR/MR, to Done on a merge — asking via a push notification whenever a Done match isn't high-confidence. Built to run on an OpenChamber schedule; see the root [`README.md`](../README.md#scheduled-tasks) setup prompt.
 - **[stokowski-handoff-labels](./skills/stokowski-handoff-labels/SKILL.md)**: Apply the two Jira labels (`stokowski-ericrulez` + `workflow:eric`) that hand an ERICRULEZ ticket off to Stokowski, only for tickets Jira's own blocking relationships say are actually startable.
+- **[stokowski-cli](./skills/stokowski-cli/SKILL.md)**: Dispatch work to Stokowski's agent workflows via the `stok` CLI, then follow or act on it live — decide gates, send signals, add input, cancel.
 - **[studio-improve-codebase-architecture](./skills/studio-improve-codebase-architecture/SKILL.md)**: Parallel architecture review of the Studio monorepo — batched sub-agents per package, HTML report, grilling loop.
 - **[studio-integration-testing](./skills/studio-integration-testing/SKILL.md)**: Integration tests for hooks/components that depend on DesignEngine, providers, and complex runtime state.
 - **[studio-migrate-to-jira](./skills/studio-migrate-to-jira/SKILL.md)**: Migrate GitLab work items from the Studio project into Jira Workstreams/Tasks.
