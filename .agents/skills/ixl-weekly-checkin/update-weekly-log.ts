@@ -9,6 +9,12 @@
 //     (Date, Subject) — if a row for that exact skill on that exact day
 //     already exists, only its currently-blank cells are filled in (never
 //     overwrite a value already there); otherwise a new row is appended.
+//     Every new row for a given call is appended in a single batched write
+//     (see writeEntries) rather than one API call per row — a full week is
+//     40+ entries, and one-write-per-row reliably tripped Sheets' per-minute
+//     write-quota (HTTP 429) on a two-child run. withRetry below is a second,
+//     independent safety net for whatever quota pressure batching doesn't
+//     fully absorb.
 //
 //     If the payload also includes "weekOf" (the same date used for that
 //     child's "summary" call below), this also (re)writes a "— Week Total —"
@@ -90,6 +96,27 @@ function readSheetIdFromConfig(): string | undefined {
   return config.sheetId;
 }
 
+/** Retries `fn` with exponential backoff on a Sheets API 429 ("Quota
+ * exceeded") response — these are transient per-minute rate limits that
+ * clear themselves after a short wait, not real failures. Any other error
+ * (bad credentials, malformed request, etc.) rethrows immediately on the
+ * first attempt, since retrying those would just waste the same wait every
+ * time for no benefit. */
+async function withRetry<T>(fn: () => Promise<T>, retries = 4, baseDelayMs = 2000): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const isQuotaError = /\[429\]/.test(message) || /Quota exceeded/i.test(message);
+      if (!isQuotaError || attempt >= retries) throw err;
+      const wait = baseDelayMs * 2 ** attempt;
+      console.error(`Hit a transient Sheets quota error, retrying in ${wait}ms (attempt ${attempt + 1}/${retries})...`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+}
+
 /** Parses the sheet's "M/D/YYYY" date format. Unparseable/blank input sorts
  * last rather than throwing, since a bad date shouldn't crash a whole-tab
  * resort over one row. */
@@ -104,30 +131,32 @@ function parseSheetDate(value: string): Date {
  * safe to call on every run even after the column already exists). Real
  * entry rows never populate it; only writeWeeklyTotal does. */
 async function ensureWeekOfColumn(sheet: GoogleSpreadsheetWorksheet): Promise<void> {
-  await sheet.loadHeaderRow();
+  await withRetry(() => sheet.loadHeaderRow());
   if (sheet.headerValues.includes(WEEK_OF_COLUMN)) return;
   const newHeaders = [...sheet.headerValues, WEEK_OF_COLUMN];
   if (newHeaders.length > sheet.columnCount) {
-    await sheet.resize({ rowCount: sheet.rowCount, columnCount: newHeaders.length });
+    await withRetry(() => sheet.resize({ rowCount: sheet.rowCount, columnCount: newHeaders.length }));
   }
-  await sheet.setHeaderRow(newHeaders);
+  await withRetry(() => sheet.setHeaderRow(newHeaders));
 }
 
 /** Re-sorts every data row in the tab by Date ascending, rewriting the whole
  * tab in one clear+append pass. Rows sharing a date keep their relative
  * order (stable sort), so a same-day "— Week Total —" row added after its
- * week's real entries stays after them. */
-async function sortSheetByDate(sheet: GoogleSpreadsheetWorksheet): Promise<void> {
-  const rows = await sheet.getRows();
+ * week's real entries stays after them. Accepts already-fetched rows when
+ * the caller has them (avoids a redundant read on top of the writes it just
+ * did); fetches fresh otherwise. */
+async function sortSheetByDate(sheet: GoogleSpreadsheetWorksheet, rows?: GoogleSpreadsheetRow[]): Promise<void> {
+  const sourceRows = rows ?? (await withRetry(() => sheet.getRows()));
   const headers = sheet.headerValues;
-  const plainRows = rows.map((row) => {
+  const plainRows = sourceRows.map((row) => {
     const values: Record<string, string | number> = {};
     for (const header of headers) values[header] = row.get(header) ?? '';
     return values;
   });
   plainRows.sort((a, b) => parseSheetDate(String(a.Date)).getTime() - parseSheetDate(String(b.Date)).getTime());
-  await sheet.clearRows();
-  if (plainRows.length) await sheet.addRows(plainRows);
+  await withRetry(() => sheet.clearRows());
+  if (plainRows.length) await withRetry(() => sheet.addRows(plainRows));
 }
 
 /** Fill only the currently-blank cells of `values` into `row`, leaving any
@@ -146,60 +175,57 @@ function fillBlanksOnly(row: GoogleSpreadsheetRow, values: Record<string, string
   return skipped;
 }
 
+/** Single-row upsert used by writeSummary, where only one row is ever
+ * written per call — the batching that writeEntries needs for a whole
+ * week's worth of rows would be pointless overhead here. Only saves when
+ * fillBlanksOnly actually changed something, so a re-run that finds nothing
+ * new to fill skips the write entirely. */
 async function upsertByKey(
   sheet: GoogleSpreadsheetWorksheet,
   values: Record<string, string | number>,
   keyColumns: string[]
 ): Promise<{ appended: boolean; skipped: string[] }> {
-  const rows = await sheet.getRows();
+  const rows = await withRetry(() => sheet.getRows());
   const existing = rows.find((r) => keyColumns.every((col) => String(r.get(col) ?? '').trim() === String(values[col] ?? '').trim()));
 
   if (!existing) {
-    await sheet.addRow(values);
+    await withRetry(() => sheet.addRow(values));
     return { appended: true, skipped: [] };
   }
 
   const skipped = fillBlanksOnly(existing, values);
-  await existing.save();
+  const changed = skipped.length < Object.keys(values).length;
+  if (changed) await withRetry(() => existing.save());
   return { appended: false, skipped };
-}
-
-/** Unlike upsertByKey, always overwrites every column in `values` — for
- * derived/computed rows (the weekly rollup) that must match today's true
- * total, never a stale value fill-blanks-only would otherwise preserve. */
-async function upsertRecompute(
-  sheet: GoogleSpreadsheetWorksheet,
-  values: Record<string, string | number>,
-  keyColumns: string[]
-): Promise<{ appended: boolean }> {
-  const rows = await sheet.getRows();
-  const existing = rows.find((r) => keyColumns.every((col) => String(r.get(col) ?? '').trim() === String(values[col] ?? '').trim()));
-
-  if (!existing) {
-    await sheet.addRow(values);
-    return { appended: true };
-  }
-
-  existing.assign(values);
-  await existing.save();
-  return { appended: false };
 }
 
 /** Sums Questions Answered / Questions Missed / Time Spent across every real
  * entry (excluding any prior rollup row) whose Date falls in the 7-day
  * window ending on `weekOfStr`, then upserts (recompute, never fill-blanks)
- * a single "— Week Total —" row carrying that sum. */
-async function writeWeeklyTotal(sheet: GoogleSpreadsheetWorksheet, child: string, weekOfStr: string): Promise<void> {
+ * a single "— Week Total —" row carrying that sum. Takes the tab's
+ * already-fetched rows (post-write, so the sum includes this run's new
+ * entries) instead of fetching again — writeEntries already paid for one
+ * fresh read right before calling this. */
+async function writeWeeklyTotal(
+  sheet: GoogleSpreadsheetWorksheet,
+  child: string,
+  weekOfStr: string,
+  rows: GoogleSpreadsheetRow[]
+): Promise<void> {
   const weekOf = parseSheetDate(weekOfStr);
   const weekStart = new Date(weekOf);
   weekStart.setDate(weekStart.getDate() - 6);
 
-  const rows = await sheet.getRows();
   let questionsAnswered = 0;
   let questionsMissed = 0;
   let timeSpent = 0;
+  let existingTotalRow: GoogleSpreadsheetRow | undefined;
   for (const row of rows) {
-    if (String(row.get('Subject') ?? '') === WEEK_TOTAL_SUBJECT) continue;
+    const subject = String(row.get('Subject') ?? '');
+    if (subject === WEEK_TOTAL_SUBJECT) {
+      if (String(row.get('Date') ?? '').trim() === weekOfStr.trim()) existingTotalRow = row;
+      continue;
+    }
     const dateStr = String(row.get('Date') ?? '');
     if (!dateStr) continue;
     const date = parseSheetDate(dateStr);
@@ -218,9 +244,15 @@ async function writeWeeklyTotal(sheet: GoogleSpreadsheetWorksheet, child: string
     'Category (Math/ELA)': '',
     [WEEK_OF_COLUMN]: weekOfStr,
   };
-  const { appended } = await upsertRecompute(sheet, values, ['Date', 'Subject']);
+
+  if (existingTotalRow) {
+    existingTotalRow.assign(values);
+    await withRetry(() => existingTotalRow!.save());
+  } else {
+    await withRetry(() => sheet.addRow(values));
+  }
   console.log(
-    `${appended ? 'Appended' : 'Updated'} week total: ${child} / week of ${weekOfStr} -> ${questionsAnswered} answered, ${questionsMissed} missed, ${timeSpent} min`
+    `${existingTotalRow ? 'Updated' : 'Appended'} week total: ${child} / week of ${weekOfStr} -> ${questionsAnswered} answered, ${questionsMissed} missed, ${timeSpent} min`
   );
 }
 
@@ -235,22 +267,46 @@ async function writeEntries(doc: GoogleSpreadsheet, { child, entries, weekOf }: 
 
   await ensureWeekOfColumn(sheet);
 
+  // One fetch, matched against in-memory — the old per-entry upsertByKey
+  // called getRows() again for every single entry (40+ redundant reads on a
+  // full week), which combined with one addRow()/save() per entry is what
+  // tripped Sheets' write-quota on a two-child run.
+  let rows = await withRetry(() => sheet.getRows());
+
+  const toAdd: EntryRow[] = [];
   for (const entry of entries) {
     if (!entry.Date || !entry.Subject) {
       console.error(`Skipping entry missing "Date" or "Subject": ${JSON.stringify(entry)}`);
       continue;
     }
-    const { appended, skipped } = await upsertByKey(sheet, entry, ['Date', 'Subject']);
+    const existing = rows.find(
+      (r) => String(r.get('Date') ?? '').trim() === String(entry.Date).trim() && String(r.get('Subject') ?? '').trim() === String(entry.Subject).trim()
+    );
     const label = `${child} / ${entry.Date} / ${entry.Subject}`;
-    if (appended) {
-      console.log(`Appended: ${label}`);
-    } else {
-      console.log(`Updated (already existed): ${label}${skipped.length ? ` — left untouched: ${skipped.join(', ')}` : ''}`);
+    if (!existing) {
+      toAdd.push(entry);
+      continue;
     }
+    const skipped = fillBlanksOnly(existing, entry);
+    const changed = skipped.length < Object.keys(entry).length;
+    if (changed) await withRetry(() => existing.save());
+    console.log(`Updated (already existed): ${label}${skipped.length ? ` — left untouched: ${skipped.join(', ')}` : ''}`);
+  }
+
+  if (toAdd.length) {
+    // Every brand-new row for this run goes in one batched write instead of
+    // one addRow() call each — the fix for the 429s this skill used to hit.
+    await withRetry(() => sheet.addRows(toAdd));
+    for (const entry of toAdd) console.log(`Appended: ${child} / ${entry.Date} / ${entry.Subject}`);
   }
 
   if (weekOf) {
-    await writeWeeklyTotal(sheet, child, weekOf);
+    // Re-fetch only if new rows actually landed above — otherwise the rows
+    // we already have are still current.
+    rows = toAdd.length ? await withRetry(() => sheet.getRows()) : rows;
+    await writeWeeklyTotal(sheet, child, weekOf, rows);
+    await sortSheetByDate(sheet, await withRetry(() => sheet.getRows()));
+    return;
   }
 
   await sortSheetByDate(sheet);
@@ -300,7 +356,7 @@ async function main(): Promise<void> {
   const auth = new JWT({ email: creds.client_email, key: creds.private_key, scopes: SCOPES });
 
   const doc = new GoogleSpreadsheet(sheetId, auth);
-  await doc.loadInfo();
+  await withRetry(() => doc.loadInfo());
 
   if (payload.entries) {
     if (!payload.child) {
