@@ -68,5 +68,20 @@
       "enabled": false
     }
   },
-  "plugin": ["oh-my-openagent@latest", "@warp-dot-dev/opencode-warp"]
+  "permission": {
+    "external_directory": {
+      "~/Sites/**": "allow",
+      "~/.local/share/opencode/worktree/**": "allow",
+      "~/.config/opencode/**": "allow",
+      // Work Laptop only: twg writes each run's output to a freshly randomized
+      // folder under this machine's TMPDIR, so this hash won't resolve on other machines.
+      "/var/folders/08/btbwrfxn3tl4vsqsvv2z46j00000gp/T/twg/**": "allow",
+      "/private/var/folders/08/btbwrfxn3tl4vsqsvv2z46j00000gp/T/twg/**": "allow"
+    },
+    "edit": {
+      "~/Sites/**": "allow",
+      "~/.local/share/opencode/worktree/**": "allow",
+      "~/.config/opencode/**": "allow"
+    }
+  }
 }
