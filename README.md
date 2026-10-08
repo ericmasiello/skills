@@ -1,6 +1,6 @@
 # ericmasiello-skills
 
-Eric's personal agent skills collection and Opencode runtime configuration. The folders are symlinked into `~/.agents` and `~/.config/opencode`. See `CONTEXT.md` for the vocabulary this repo uses (Legacy / Needs-review / Work-context / External-only / User-scope / Companion agent) and `docs/adr/` for why it's laid out this way.
+Eric's personal agent skills collection and Opencode runtime configuration. The folders are symlinked into `~/.agents`, `~/.claude/skills` and `~/.config/opencode`. See `CONTEXT.md` for the vocabulary this repo uses (Legacy / Needs-review / Work-context / External-only / User-scope / Companion agent) and `docs/adr/` for why it's laid out this way.
 
 ## Layout
 
@@ -20,7 +20,7 @@ Eric's personal agent skills collection and Opencode runtime configuration. The 
 │   └── agents/          # how skills should use this repo's issue tracker, labels, domain docs
 ├── CONTEXT.md           # glossary for this repo's own domain
 ├── AGENTS.md            # pointers agents read before acting in this repo
-└── setup.sh             # idempotent installer — symlinks .agents/ and opencode/ into place
+└── setup.sh             # idempotent installer — symlinks .agents/, Claude Code skills and opencode/ into place
 ```
 
 ## Prerequisites
@@ -42,7 +42,7 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 ./setup.sh
 ```
 
-Symlinks `~/.agents` → this repo's `.agents`, and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
+Symlinks `~/.agents` → this repo's `.agents`, each skill into `~/.claude/skills/<name>` so Claude Code picks it up (see `docs/adr/0012-*.md`), and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
 
 ## Restricted repos & worktrees
 

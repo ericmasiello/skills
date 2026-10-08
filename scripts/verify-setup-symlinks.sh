@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# Verifies that setup.sh produces exactly the symlinks docs/adr/0009-*.md
-# and docs/adr/0010-*.md say it should: ~/.agents, ~/.agents/skills, and
-# ~/.config/opencode/agents as real directories, with every entry inside
-# each individually symlinked back into the repo. Run by CI
+# Verifies that setup.sh produces exactly the symlinks docs/adr/0009-*.md,
+# docs/adr/0010-*.md and docs/adr/0012-*.md say it should: ~/.agents,
+# ~/.agents/skills, ~/.claude/skills and ~/.config/opencode/agents as real
+# directories, with every entry inside each individually symlinked back into
+# the repo. Run by CI
 # (.github/workflows/verify-symlinks.yml) on every PR so setup.sh's linking
 # logic can't silently drift from what's actually in the repo.
 #
@@ -24,6 +25,15 @@ error() {
   echo "FAIL: $1"
   fail=1
 }
+
+# Seed ~/.claude/skills with what a real machine may already have, so the
+# checks below cover docs/adr/0012-*.md's edge cases: a hand-made relative
+# link that setup.sh must accept, a link left dangling by a deleted skill
+# that it must prune, and the desktop app's synced/ folder it must not touch.
+CLAUDE_SKILLS_DEST="$SCRATCH_HOME/.claude/skills"
+mkdir -p "$CLAUDE_SKILLS_DEST/synced/some-app-skill"
+ln -s ../../.agents/skills/tdd "$CLAUDE_SKILLS_DEST/tdd"
+ln -s "$REPO_DIR/.agents/skills/deleted-skill" "$CLAUDE_SKILLS_DEST/deleted-skill"
 
 echo "Running setup.sh against scratch HOME=$SCRATCH_HOME"
 if ! HOME="$SCRATCH_HOME" bash "$REPO_DIR/setup.sh" >"$SCRATCH_HOME/setup-output.log" 2>&1; then
@@ -80,6 +90,36 @@ for entry in "$AGENTS_DEST/skills"/*; do
   [[ "$found" == 1 ]] || error "setup.sh produced an entry not present in the repo: $AGENTS_DEST/skills/$name"
 done
 
+check_real_dir "$CLAUDE_SKILLS_DEST"
+
+expected_claude_skills=()
+for entry in "$REPO_DIR/.agents/skills"/*/; do
+  entry="${entry%/}"
+  name="$(basename "$entry")"
+  expected_claude_skills+=("$name")
+  dest="$CLAUDE_SKILLS_DEST/$name"
+  if [[ ! -L "$dest" ]]; then
+    error "$dest is not a symlink (expected -> $entry)"
+  elif [[ ! -e "$dest" || "$(realpath "$dest")" != "$(realpath "$entry")" ]]; then
+    error "$dest -> $(readlink "$dest") does not resolve to $entry"
+  fi
+done
+
+[[ "$(readlink "$CLAUDE_SKILLS_DEST/tdd")" == "../../.agents/skills/tdd" ]] ||
+  error "setup.sh replaced the equivalent relative link $CLAUDE_SKILLS_DEST/tdd instead of accepting it"
+[[ -d "$CLAUDE_SKILLS_DEST/synced/some-app-skill" && ! -L "$CLAUDE_SKILLS_DEST/synced" ]] ||
+  error "setup.sh touched $CLAUDE_SKILLS_DEST/synced, which the Claude desktop app owns"
+
+for entry in "$CLAUDE_SKILLS_DEST"/*; do
+  name="$(basename "$entry")"
+  [[ "$name" == "synced" ]] && continue
+  found=0
+  for s in "${expected_claude_skills[@]}"; do
+    [[ "$s" == "$name" ]] && found=1
+  done
+  [[ "$found" == 1 ]] || error "unexpected entry left in $CLAUDE_SKILLS_DEST: $name (dangling links into the repo should be pruned)"
+done
+
 OPENCODE_AGENTS_DEST="$SCRATCH_HOME/.config/opencode/agents"
 check_real_dir "$OPENCODE_AGENTS_DEST"
 
@@ -120,8 +160,8 @@ done <<<"$vendor_patterns"
 if [[ "$fail" == 1 ]]; then
   echo
   echo "Symlink layout has drifted from what setup.sh / .gitignore expect."
-  echo "See docs/adr/0009-*.md and docs/adr/0010-*.md."
+  echo "See docs/adr/0009-*.md, docs/adr/0010-*.md and docs/adr/0012-*.md."
   exit 1
 fi
 
-echo "OK: symlink layout matches expectations for ${#expected_skills[@]} skills, ${#expected_opencode_agents[@]} opencode agents, + top-level .agents/ entries."
+echo "OK: symlink layout matches expectations for ${#expected_skills[@]} skills (${#expected_claude_skills[@]} linked for Claude Code), ${#expected_opencode_agents[@]} opencode agents, + top-level .agents/ entries."

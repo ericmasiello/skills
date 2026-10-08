@@ -19,6 +19,9 @@
 # those directories without ever landing inside this repo's git working
 # tree — see docs/adr/0009-*.md and docs/adr/0010-*.md for why.
 #
+# ~/.claude/skills gets the same per-skill symlinks so Claude Code picks the
+# skills up too — see docs/adr/0012-*.md.
+#
 # CI (.github/workflows/verify-symlinks.yml, via scripts/verify-setup-symlinks.sh)
 # runs this script against a scratch HOME and fails the build if the symlinks
 # it produces don't match .agents/'s actual contents — keep that in mind if
@@ -58,7 +61,10 @@ link() {
   fi
 
   if [[ -L "$dest" ]]; then
-    if [[ "$(readlink "$dest")" == "$src" ]]; then
+    # Also accept a link that takes a different route to the same place,
+    # e.g. a hand-made ~/.claude/skills/tdd -> ../../.agents/skills/tdd.
+    if [[ "$(readlink "$dest")" == "$src" ]] ||
+       [[ -e "$dest" && "$(realpath "$dest")" == "$(realpath "$src")" ]]; then
       echo "ok:      $dest"
       return
     fi
@@ -102,8 +108,44 @@ link_dir_contents() {
   done
 }
 
+# Claude Code loads user-level skills from ~/.claude/skills/<name>/SKILL.md.
+# Same per-entry layout as ~/.agents/skills, but directories only (no
+# .DS_Store), and never touching entries this repo didn't put there — the
+# Claude desktop app keeps its own synced/ folder alongside. _studio-shared
+# has no SKILL.md but is linked anyway: studio-* skills read
+# ../_studio-shared/ relative to their own directory. See docs/adr/0012-*.md.
+link_claude_skills() {
+  local src="$REPO_DIR/.agents/skills" dest="$HOME/.claude/skills"
+
+  if [[ -L "$dest" ]]; then
+    backup_dest "$dest"
+  fi
+
+  mkdir -p "$dest"
+
+  local entry name
+  for entry in "$src"/*/; do
+    entry="${entry%/}"
+    name="$(basename "$entry")"
+    link "$entry" "$dest/$name"
+  done
+
+  # Drop links left dangling by a skill that was deleted or renamed in this
+  # repo, whether they point here directly or via ~/.agents/skills.
+  local target
+  for entry in "$dest"/*; do
+    [[ -L "$entry" && ! -e "$entry" ]] || continue
+    target="$(readlink "$entry")"
+    if [[ "$target" == "$src/"* || "$target" == *".agents/skills/"* ]]; then
+      rm "$entry"
+      echo "pruned:  $entry (dangling -> $target)"
+    fi
+  done
+}
+
 link_dir_contents "$REPO_DIR/.agents" "$HOME/.agents" skills
 link_dir_contents "$REPO_DIR/.agents/skills" "$HOME/.agents/skills"
+link_claude_skills
 
 link_dir_contents "$REPO_DIR/opencode/agents"   "$HOME/.config/opencode/agents"
 link "$REPO_DIR/opencode/commands"              "$HOME/.config/opencode/commands"
