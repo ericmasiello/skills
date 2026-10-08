@@ -71,6 +71,13 @@
   "permission": {
     "external_directory": {
       "~/Sites/**": "allow",
+      // ~/.agents is a symlink farm into ~/Sites/ericmasiello-skills; permission
+      // matching checks the path as given, before resolving symlinks, so this
+      // needs its own entry even though its targets already live under ~/Sites.
+      "~/.agents/**": "allow",
+      // Home-level OpenCode state (e.g. the `plan` agent's scratch files),
+      // distinct from ~/.config/opencode below.
+      "~/.opencode/**": "allow",
       "~/.local/share/opencode/worktree/**": "allow",
       "~/.config/opencode/**": "allow",
       // Work Laptop only: twg writes each run's output to a freshly randomized
@@ -80,6 +87,8 @@
     },
     "edit": {
       "~/Sites/**": "allow",
+      "~/.agents/**": "allow",
+      "~/.opencode/**": "allow",
       "~/.local/share/opencode/worktree/**": "allow",
       "~/.config/opencode/**": "allow"
     }
