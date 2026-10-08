@@ -32,7 +32,7 @@ It reports machine-detectable violations with rule IDs, line numbers, and column
 
 ### 3. Dispatch the specialist auditors in parallel
 
-Give each auditor the raw input path and instruct it to report **every** violation it can find, not a rewritten document. Instruct auditors to **emit the coverage summary first** before detailed findings to ensure load-bearing coverage data survives output length limits.
+Give each auditor the raw input path and instruct it to report every violation it can find, not a rewritten document. Instruct auditors to emit the coverage summary first, before detailed findings. This keeps the coverage data intact even if output hits a length limit.
 
 Each finding must follow this exact format:
 
@@ -67,7 +67,7 @@ Use these explicit assignments with canonical rule names:
   - rule 32 (cut nominalizations)
 
 - `unslop-structure-auditor`:
-  - rule 13 (em dash overuse — consult `reference/em-dash-patterns.md`)
+  - rule 13 (em dash overuse, consult `reference/em-dash-patterns.md`)
   - rule 14 (colon overuse)
   - rule 15 (boldface overuse)
   - rule 16 (inline-header lists)
@@ -107,14 +107,14 @@ Rule 02 (name-dropping) | status: patch | findings: 1 | lines: 14
 Rule 33 (lead with the point) | status: clear | findings: 0
 ```
 
-Do not proceed while a rule is missing from the ledger. Conflicting patches are resolved by preserving meaning, then choosing the smallest change. Low-confidence findings are reviewed by the Editor Agent rather than blindly applied.
+Do not proceed while a rule is missing from the ledger. The Editor Agent resolves conflicting patches by preserving meaning, then choosing the smallest change. It reviews low-confidence findings instead of applying them without review.
 
 ### 5. Apply patches, verify regressions, then re-audit
 
 Apply accepted patches from the ledger in one editing pass.
 
 **Step 5b (Regression diff check):**
-Diff the patched text against the pre-patch text. Run the mechanical gate on the diff's added/changed lines. If any new finding appears in added lines (e.g. accidentally introducing a rule 9 "not just" contrast or dangling clause while fixing boldface/em dashes), fix the regression immediately before initiating specialist re-audits.
+Diff the patched text against the pre-patch text. Run the mechanical gate on the diff's added/changed lines. A new finding in added lines (e.g. a rule 9 "not just" contrast, or a dangling clause introduced while fixing boldface or em dashes) is a regression. Fix it immediately, before starting specialist re-audits.
 
 **Step 5c (Specialist re-audit):**
 Re-run the mechanical gate and all specialist audits against the edited text. Stop only when every rule is `clear` or has an explicit, justified exception:
