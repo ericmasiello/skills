@@ -19,6 +19,7 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[domain-modeling](./skills/domain-modeling/SKILL.md)**: Build and sharpen a project's domain model — used when discussing terminology or editing `CONTEXT.md`/ADRs.
 - **[to-spec](./skills/to-spec/SKILL.md)**: Turn the current conversation into a spec and publish it to the issue tracker — no interview, just synthesis.
 - **[to-tickets](./skills/to-tickets/SKILL.md)**: Break a plan, spec, or conversation into tracer-bullet tickets with declared blocking edges.
+- **[to-tickets-ericmasiello](./skills/to-tickets-ericmasiello/SKILL.md)**: Run this instead of `to-tickets` directly on a repo that might be in `setup-ericmasiello-skills` sidecar mode — same breakdown and publishing, plus a direct `docs/agents/*.md` read first, since the sidecar skips the `AGENTS.md` pointer `to-tickets` otherwise expects. See `../docs/adr/0013-*.md`.
 - **[wayfinder](./skills/wayfinder/SKILL.md)**: Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
 - **[implement](./skills/implement/SKILL.md)**: Implement a piece of work based on a spec or set of tickets.
 - **[split-mr](./skills/split-mr/SKILL.md)**: Decide whether a branch's diff should ship as a stack of small, single-concern MRs, a set of parallel ones, or stay as one — then build the chosen split.
