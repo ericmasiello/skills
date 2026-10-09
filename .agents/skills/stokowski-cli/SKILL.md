@@ -1,6 +1,6 @@
 ---
 name: stokowski-cli
-description: "Dispatch work to Stokowski's agent workflows via the `stok` CLI, check or follow a work item live, and act on it — answer a pending gate decision, send a signal, add input, cancel. Use when the user wants to dispatch work to Stokowski, check/watch a Stokowski work item's status, decide a pending gate, send a signal, or asks about `stok`/Stokowski work items (Vistaprint work-context)."
+description: "Dispatch work to Stokowski's agent workflows via the `stok` CLI, check or follow a work item live, and act on it — answer a pending gate decision, send a signal, add input, cancel. Use when the user wants to dispatch work to Stokowski, check/watch a Stokowski work item's status, decide a pending gate, send a signal, look up a work item's status/logs from a Jira ticket id, or asks about `stok`/Stokowski work items (Vistaprint work-context)."
 compatibility: "Requires the stok CLI (@vp/stokowski-cli) installed from Vista's Artifactory npm registry and authenticated via 'stok login' (Cimpress SSO) — Vistaprint work-context only."
 ---
 
@@ -36,6 +36,15 @@ stok <command> --help       # that command's exact flags, an EXAMPLES block, and
 - **`close` and `cancel` are destructive** and require `--yes` when run non-interactively (an interactive terminal gets a confirm prompt, default No).
 - **Set a default project once** (`export STOKOWSKI_PROJECT=<id>` or `profiles.<name>.project` in `~/.config/stokowski/config.json`) instead of passing `-p` on every call. Precedence: flag, then env, then config file, then the built-in `production` profile. Use `--profile sandbox` to target the sandbox deployment instead of production.
 - **Requests carry an idempotency key** (`--idempotency-key`, auto-generated otherwise) — retrying a `dispatch`/`input`/`decide`/etc. after a network blip is safe.
+
+## Finding a work item from its Jira ticket
+
+`stok` has no `--jira <key>` lookup — a ticket reveals its work item id only indirectly, through the comment Stokowski posts back on it. Requires `twg` authenticated against `vistaprint.atlassian.net`; see [`vista-atlassian`](../vista-atlassian/SKILL.md) for auth/setup.
+
+1. `twg jira workitem comment query --issue-id <KEY>` and find the comment carrying a `stokowski-dashboard.../task/native/<project>/<uuid>` link. The trailing `<uuid>` is the work item id; the path segment before it (e.g. `jira-ericrulez`) is the `stok` project id.
+2. `stok status <uuid> -p <project> --events 25` for the lifecycle trail, or `stok result <uuid> -p <project>` for the full stored output.
+
+No such comment means there's no bridge to follow — the ticket was never picked up by the label hand-off (see below), or it was dispatched ad hoc via `stok dispatch` instead. Fall back to `stok list -p <project> --all` and match by title.
 
 ## Relationship to label-based hand-off
 
