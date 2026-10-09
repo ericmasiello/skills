@@ -60,7 +60,25 @@
     "skylight": {
       "command": ["npx", "-y", "skylight-mcp"],
       "enabled": false,
-      "type": "local"
+      "type": "local",
+      "environment": {
+        // Works around an OpenCode bug, not a skylight-mcp one: OpenCode's
+        // MCP client advertises elicitation.form support during the
+        // handshake, but never answers an elicitation/create request back
+        // (the form is created for session "global" instead of the calling
+        // session, so no prompt ever renders). Any confirm-gated skylight
+        // tool (skylight_clear_list, bulk deletes, uploads, invites, etc.)
+        // then hangs until some outer timeout kills the call — ~600s via
+        // Code Mode. skylight-mcp's own confirm-write helper
+        // (@chrischall/mcp-utils) already ships this env var as the
+        // official escape hatch: it skips elicitation entirely and falls
+        // back to a two-step preview + confirmToken flow instead. Scoped to
+        // this one server via its own `environment`, not a global env var,
+        // so other MCP servers still get real confirmation prompts.
+        // Tracking: https://github.com/anomalyco/opencode/issues/51856
+        // (fix in progress — PR #53608). Safe to remove once that lands.
+        "MCP_CONFIRM_ELICITATION": "off"
+      }
     },
     "slack": {
       "type": "remote",
