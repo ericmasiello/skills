@@ -58,7 +58,7 @@ glab mr create --title "<title>" --description "<body>" \
 
 > Pass `--source-branch` explicitly and avoid `--related-issue`/`--copy-issue-labels` — those are GitLab-issue features with no Jira equivalent, and `--related-issue` causes glab to auto-generate a source branch name from the issue title instead of using the current branch, resulting in an MR with 0 commits.
 
-This repo has no GitLab-issue-backed `workstream::*`/`status::*` label scheme for Jira-tracked work — don't apply [the shared label reference](../_studio-shared/LABELS.md) here. It still applies to skills working against real GitLab issues (e.g. `stokowski-handoff-labels`).
+This repo has no GitLab-issue-backed `workstream::*`/`status::*` label scheme for Jira-tracked work — don't apply [the shared label reference](../_studio-shared/LABELS.md) here. It still applies to skills working against real GitLab issues (e.g. `stokowski-implement`).
 
 Reviewer test guidance and the `## Architecture` diagram convention (from the `architectural-sketch` skill) live in `write-pr-description`'s writing-craft reference now — the DEX and MR-title steering notes above are the only Vistaprint/Studio-specific residue left.
 

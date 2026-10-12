@@ -48,4 +48,4 @@ No such comment means there's no bridge to follow — the ticket was never picke
 
 ## Relationship to label-based hand-off
 
-[`stokowski-handoff-labels`](../stokowski-handoff-labels/SKILL.md) hands an ERICRULEZ ticket to Stokowski by applying Jira labels that Stokowski polls for — no CLI call, no immediate work item id, and no live follow-up. Use `stok dispatch` instead when you need the work item id back immediately, want to `stok watch` it live, or are dispatching work that isn't an ERICRULEZ ticket at all (e.g. ad hoc work from a brief file). The two paths create work through different triggers; don't mix them for the same request.
+[`stokowski-implement`](../stokowski-implement/SKILL.md) hands an ERICRULEZ ticket to Stokowski by applying Jira labels that Stokowski polls for — no CLI call, no immediate work item id, and no live follow-up. Use `stok dispatch` instead when you need the work item id back immediately, want to `stok watch` it live, or are dispatching work that isn't an ERICRULEZ ticket at all (e.g. ad hoc work from a brief file). The two paths create work through different triggers; don't mix them for the same request.

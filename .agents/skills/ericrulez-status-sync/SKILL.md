@@ -69,7 +69,7 @@ One table built from the script's JSON output: ticket key, old status → new st
 
 ## Not in scope
 
-- No label changes (that's `stokowski-handoff-labels`), no PR/MR comment posting outside the step 6 decision record, no code changes.
+- No label changes (that's `stokowski-implement`), no PR/MR comment posting outside the step 6 decision record, no code changes.
 - No handling of Epics or sub-task-specific rollups — this skill only moves leaf work items.
 - No persisted session/thread between runs — each run is a fresh, self-contained check against the board and the ticket comments are the only continuity (see step 6). If a question from one run goes unanswered before the next scheduled run fires, you'll see it posted again in the newer run's session rather than a reminder in the old one.
 </content>
