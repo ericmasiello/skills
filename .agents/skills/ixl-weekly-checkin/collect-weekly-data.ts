@@ -1,8 +1,9 @@
 #!/usr/bin/env -S node --experimental-strip-types
 // Replaces SKILL.md's old Playwright/UI-scraping Steps 1-2 (login, Usage
 // Details log, Diagnostic levels, Score Chart) with the fetch-only client in
-// ixl-client.ts (see docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md
-// for why) — no browser, no screenshots, no
+// ../_ixl-shared/ixl-client.ts (see docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md
+// for why it's fetch-only, docs/adr/0014-*.md for why that client now lives
+// in a shared folder instead of here) — no browser, no screenshots, no
 // per-skill "which subject is this" judgment call (the server splits
 // Math/ELA for us). Read-only: prints JSON, never writes to IXL or the
 // sheet — pipe the "entries" and the diagnostic levels straight into
@@ -25,7 +26,7 @@
 // Environment (.env, see .env.example):
 //   IXL_EMAIL, IXL_PASSWORD, IXL_PARENT_PASSWORD
 
-import { IxlSession, login, discoverChildUserIds, fetchUsageEntries, fetchDiagnosticLevels, fetchScoreChartPracticed } from './ixl-client.ts';
+import { IxlSession, login, discoverChildUserIds, fetchUsageEntries, fetchDiagnosticLevels, fetchScoreChartPracticed } from '../_ixl-shared/ixl-client.ts';
 
 interface Args {
   child: string;

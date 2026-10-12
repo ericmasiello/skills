@@ -1,9 +1,15 @@
-// Shared fetch-only IXL client, implemented once so collect-weekly-data.ts
-// and validate-against-sheet.ts don't each carry their own copy. No browser,
-// no Playwright: a cookie jar plus three HTTP calls authenticates as Parent,
-// after which every analytics/diagnostic endpoint is a plain authenticated
-// GET. See docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md
+// Shared fetch-only IXL client, implemented once so no script carries its
+// own copy. No browser, no Playwright: a cookie jar plus three HTTP calls
+// authenticates as Parent, after which every analytics/diagnostic endpoint
+// is a plain authenticated GET. See
+// docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md
 // for why this replaced the UI-scraping approach.
+//
+// Lives in this non-skill _ixl-shared/ folder (mirroring the
+// _studio-shared/_ericmasiello-shared convention — see docs/adr/0014-*.md)
+// because both ixl-weekly-checkin and ixl-daily-checkin import it via a
+// relative path (../_ixl-shared/ixl-client.ts). Both skills break without
+// this file; it has no SKILL.md of its own and is never invoked directly.
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';

@@ -15,10 +15,10 @@ The sheet also needs a shared `Weekly Summary` tab (headers: `Week Of | Child | 
 ## 2. IXL login credentials
 
 ```bash
-cp .env.example .env
+cp ../_ixl-shared/.env.example ../_ixl-shared/.env
 ```
 
-Fill in `IXL_EMAIL`, `IXL_PASSWORD`, and `IXL_PARENT_PASSWORD` in `.env` (gitignored — add it to the repo's root `.gitignore` if it isn't already there; check first). All three are required — [SKILL.md](SKILL.md)'s Step 1 logs in fresh every run via a plain HTTP request flow (no browser, no saved session file; see [ADR-0012](../../../docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md) for why, `ixl-client.ts` for the exact requests), and that flow is a two-stage login: the regular username/password form, then a "Who are you? → Parent" step that asks for a separate **secret word** (`IXL_PARENT_PASSWORD`), distinct from the account password.
+Fill in `IXL_EMAIL`, `IXL_PASSWORD`, and `IXL_PARENT_PASSWORD` in `_ixl-shared/.env` (gitignored — add it to the repo's root `.gitignore` if it isn't already there; check first). This file is **shared with `ixl-daily-checkin`** — one login to maintain, not two; skip this step if that skill's setup already did it. All three are required — [SKILL.md](SKILL.md)'s Step 1 logs in fresh every run via a plain HTTP request flow (no browser, no saved session file; see [ADR-0012](../../../docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md) for why it's fetch-only, [ADR-0014](../../../docs/adr/0014-ixl-shared-extracts-reusable-ixl-client-for-daily-and-weekly-checkins.md) for why the client lives in `_ixl-shared/` rather than here, `../_ixl-shared/ixl-client.ts` for the exact requests), and that flow is a two-stage login: the regular username/password form, then a "Who are you? → Parent" step that asks for a separate **secret word** (`IXL_PARENT_PASSWORD`), distinct from the account password.
 
 ## 3. Google Sheets service account
 
@@ -27,7 +27,7 @@ The update script needs write access to the tracker sheet without ever holding y
 1. In Google Cloud Console: create (or reuse) a project, enable the **Google Sheets API**, then create a **service account** and download its JSON key.
 2. Store that JSON key file **outside this repo entirely** — e.g. `~/.secrets/ixl-sheets-sa.json`. It never gets a `.local.json` name or a place inside this skill's directory; the `*.local.json` gitignore rule is a safety net, not the actual boundary here.
 3. Open the tracker sheet, click **Share**, and add the service account's `client_email` (visible in the JSON key, looks like `<name>@<project>.iam.gserviceaccount.com`) as an **Editor**. This step is the one people forget — without it, every write call fails with a permissions error no matter how correct the credentials are.
-4. In `.env`, set `GOOGLE_SHEETS_CREDENTIALS` to the **path** from step 2 above — never the JSON contents.
+4. In this skill's own `.env` (not `_ixl-shared/.env`), set `GOOGLE_SHEETS_CREDENTIALS` to the **path** from step 2 above — never the JSON contents. `cp .env.example .env` first if you haven't already.
 
 ## 4. Install dependencies
 
