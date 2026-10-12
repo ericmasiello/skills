@@ -7,8 +7,6 @@ description: Hand off ERICRULEZ ticket(s) to Stokowski by resolving which workfl
 
 Stokowski (the execution agent that works ERICRULEZ tickets) only picks up a ticket once it carries `stokowski-ericrulez`. Which of its workflows actually runs is decided by whichever `workflow:*` label rides along with it — get that wrong and the ticket runs the wrong playbook, not just a late one. This skill resolves the ticket, the workflow, and the repo, then applies all three labels — but only to a ticket Jira's own blocking relationships say is actually startable.
 
-Supersedes `stokowski-handoff-labels`, which only ever applied the single default `workflow:eric`.
-
 Requires `twg` authenticated against `vistaprint.atlassian.net`; see [`vista-atlassian`](../vista-atlassian/SKILL.md) for auth/setup.
 
 ## 1. Identify the ticket(s)
