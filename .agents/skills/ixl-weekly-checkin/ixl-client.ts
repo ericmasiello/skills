@@ -154,6 +154,20 @@ export function toSheetDateFormat(isoDate: string): string {
   return `${m}/${d}/${y}`;
 }
 
+/** IXL's analytics endpoints (student-usage/run, score-chart/run) treat
+ * their own `endDate` query param as an exclusive upper bound — midnight at
+ * the *start* of that date, not the end of it. Confirmed live: querying
+ * with endDate=2026-10-11 silently dropped every session from 10/11 itself
+ * (including same-day activity hours earlier), while endDate=2026-10-12
+ * picked them up. Every caller here wants an inclusive end date, so this
+ * bumps it by one day right at the fetch boundary rather than pushing that
+ * off-by-one onto every call site. */
+function exclusiveEndDate(inclusiveEndDate: string): string {
+  const [y, m, d] = inclusiveEndDate.split('-').map(Number);
+  const date = new Date(y, m - 1, d + 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function minutesFromSeconds(seconds: number): number {
   if (seconds < 30) return 0.5;
   return Math.round(seconds / 60);
@@ -175,7 +189,7 @@ export async function fetchUsageEntries(
   for (const [subjects, category] of [['0', 'Math'] as const, ['1', 'ELA'] as const]) {
     const url =
       `https://www.ixl.com/analytics/student-usage/run?&rosterClass=&courseId=&subjects=${subjects}` +
-      `&lowGrade=-2&highGrade=12&startDate=${startDate}&endDate=${endDate}&timePeriod=6&student=${studentId}`;
+      `&lowGrade=-2&highGrade=12&startDate=${startDate}&endDate=${exclusiveEndDate(endDate)}&timePeriod=6&student=${studentId}`;
     const data = await session.getJson<UsageRunResponse>(url);
 
     for (const sess of data.table ?? []) {
@@ -271,7 +285,7 @@ export async function fetchScoreChartPracticed(
   const url =
     `https://www.ixl.com/analytics/score-chart/run?subject=${subject}&standardDoc=&highscore=true` +
     `&scoresHighlighted=none&scoresDisplayed=all&scoringType=best_attempt&goalOfProficient=true` +
-    `&student=${studentId}&grades=${grade}&timePeriod=6&startDate=${startDate}&endDate=${endDate}` +
+    `&student=${studentId}&grades=${grade}&timePeriod=6&startDate=${startDate}&endDate=${exclusiveEndDate(endDate)}` +
     `&rosterClass=&courseId=&skillSource=1`;
   const data = await session.getJson<ScoreChartResponse>(url);
 

@@ -12,8 +12,10 @@
 //   node --experimental-strip-types collect-weekly-data.ts <child> [options]
 //
 // Options:
-//   --start=YYYY-MM-DD   defaults to 6 days before today (a 7-day window)
-//   --end=YYYY-MM-DD     defaults to today
+//   --start=YYYY-MM-DD   defaults to the Monday of the current calendar week
+//   --end=YYYY-MM-DD     defaults to today (so a Sunday run naturally covers
+//                        Monday through Sunday; a mid-week catch-up run
+//                        covers Monday through whatever day it is)
 //   --grades=math:2,ela:1
 //       Also run the Score Chart anomaly-scan pull for the given grade per
 //       subject. Omit on a first call — read the printed diagnostic levels,
@@ -38,6 +40,17 @@ function isoDaysAgo(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Monday of the calendar week containing today, as YYYY-MM-DD. getDay()
+ * returns 0=Sunday..6=Saturday; (day + 6) % 7 turns that into "days since
+ * Monday" for every day of the week, including Sunday itself (6 days
+ * since the week's Monday). */
+function mondayOfThisWeek(): string {
+  const d = new Date();
+  const daysSinceMonday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - daysSinceMonday);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function parseArgs(argv: string[]): Args {
   const child = argv[0];
   if (!child || child.startsWith('--')) {
@@ -58,7 +71,7 @@ function parseArgs(argv: string[]): Args {
       if (subject === 'ela') grades.ela = Number(grade);
     }
   }
-  return { child, start: opts.start ?? isoDaysAgo(6), end: opts.end ?? isoDaysAgo(0), grades };
+  return { child, start: opts.start ?? mondayOfThisWeek(), end: opts.end ?? isoDaysAgo(0), grades };
 }
 
 async function main(): Promise<void> {
