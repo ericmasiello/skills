@@ -59,7 +59,7 @@
     },
     "skylight": {
       "command": ["npx", "-y", "skylight-mcp"],
-      "enabled": false,
+      "enabled": true,
       "type": "local",
       "environment": {
         // Works around an OpenCode bug, not a skylight-mcp one: OpenCode's
