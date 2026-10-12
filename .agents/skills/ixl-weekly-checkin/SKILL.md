@@ -20,10 +20,10 @@ The tracker sheet has two kinds of tab, both already created — this skill neve
 
 ```bash
 nvm use   # picks up the .nvmrc here if your shell isn't already on Node 24+
-node --env-file=.env collect-weekly-data.ts <child>
+node --env-file=../_ixl-shared/.env --env-file=.env collect-weekly-data.ts <child>
 ```
 
-Run once per name in `config.local.json`. No browser, no saved session to load — the script logs into IXL fresh every run (the 3-request flow documented in `ixl-client.ts`) using `IXL_EMAIL`, `IXL_PASSWORD`, and `IXL_PARENT_PASSWORD` from `.env`, all three required. Default window is the trailing 7 days ending today; pass `--start=YYYY-MM-DD --end=YYYY-MM-DD` to cover a different range (e.g. catching up on a missed week).
+Run once per name in `config.local.json`. No browser, no saved session to load — the script logs into IXL fresh every run (the 3-request flow documented in `../_ixl-shared/ixl-client.ts`) using `IXL_EMAIL`, `IXL_PASSWORD`, and `IXL_PARENT_PASSWORD` from `../_ixl-shared/.env` (shared with `ixl-daily-checkin` — one login to maintain, not two), all three required. Default window is the trailing 7 days ending today; pass `--start=YYYY-MM-DD --end=YYYY-MM-DD` to cover a different range (e.g. catching up on a missed week).
 
 The script prints one JSON object: `entries` (one row per skill practiced, Math/ELA already split by the server, same-day duplicate sessions already merged, Diagnostic sessions already excluded — this is Step 3a's payload, ready as-is) and `diagnostic` (this week's `Math`/`ELA` overall levels, either a firm number or an `"min-max"` range string if the diagnostic is still resolving).
 
@@ -58,6 +58,8 @@ Two independent calls per child, via the bundled script (see its own header comm
 node --env-file=.env update-weekly-log.ts '{"child":"<name>","weekOf":"<M/D/YYYY, today>","entries":<Step 1's entries array>}'
 ```
 
+(This script only touches the Sheets side, so it only needs this skill's own `.env` — not `../_ixl-shared/.env`.)
+
 Each entry is matched against that child's tab by `(Date, Subject)` — a matching row already there has only its currently-blank cells filled in (never overwritten), otherwise a new row is appended. Safe to re-run: re-checking the same week twice never duplicates or clobbers a row. Passing `weekOf` also (re)writes that week's `— Week Total —` rollup row and re-sorts the whole tab by `Date` ascending — always include it, not just on a first run. `.env` isn't auto-loaded by Node, so every invocation needs `--env-file=.env` (or the run fails with "Missing GOOGLE_SHEETS_CREDENTIALS").
 
 **b. Weekly Summary — one "summary" call per child.** `Week Of` is today's actual date (not a normalized "Monday of the week") — that's the established convention from the old per-child tabs, carried forward:
@@ -76,7 +78,7 @@ Per child: this week's math/ELA levels with the delta from last week (both from 
 
 ## Validating this skill's own accuracy
 
-`validate-against-sheet.ts` (no args, same `.env`) re-derives every raw-log row from IXL going back to the earliest Date already in each child's tab and diffs it against what's actually recorded — a standing self-check, not part of the weekly flow itself. Last run: 146/146 historical rows matched exactly across both kids.
+`validate-against-sheet.ts` (no args, same two `--env-file` flags as Step 1) re-derives every raw-log row from IXL going back to the earliest Date already in each child's tab and diffs it against what's actually recorded — a standing self-check, not part of the weekly flow itself. Last run: 146/146 historical rows matched exactly across both kids.
 
 ## Open gaps this skill surfaces, never silently resolves
 

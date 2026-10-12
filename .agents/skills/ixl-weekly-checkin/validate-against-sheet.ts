@@ -1,9 +1,10 @@
 #!/usr/bin/env -S node --experimental-strip-types
-// DRAFT — validates the fetch-only network API (ixl-client.ts, see
-// docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md
-// for why) against the data already recorded in the family's
-// tracker sheet. Read-only end to end: logs into IXL via ixl-client.ts (no
-// browser, no Playwright), pulls each child's usage log and current
+// DRAFT — validates the fetch-only network API (../_ixl-shared/ixl-client.ts,
+// see docs/adr/0012-ixl-weekly-checkin-replaces-playwright-with-fetch-only-ixl-client.md
+// for why it's fetch-only, docs/adr/0014-*.md for why that client now lives
+// in a shared folder instead of here) against the data already recorded in
+// the family's tracker sheet. Read-only end to end: logs into IXL via
+// ixl-client.ts (no browser, no Playwright), pulls each child's usage log and current
 // diagnostic levels straight from IXL's JSON endpoints, and diffs that
 // against each child's existing raw-log tab and the most recent Weekly
 // Summary row. Writes nothing back to IXL or the sheet.
@@ -24,7 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
-import { IxlSession, login, discoverChildUserIds, fetchUsageEntries, fetchDiagnosticLevels, type UsageEntry } from './ixl-client.ts';
+import { IxlSession, login, discoverChildUserIds, fetchUsageEntries, fetchDiagnosticLevels, type UsageEntry } from '../_ixl-shared/ixl-client.ts';
 
 const SKILL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const WEEK_TOTAL_SUBJECT = '— Week Total —';

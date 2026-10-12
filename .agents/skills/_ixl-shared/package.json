@@ -1,0 +1,6 @@
+{
+  "name": "ixl-shared",
+  "private": true,
+  "type": "module",
+  "description": "Shared, non-skill IXL client (ixl-client.ts) imported by ixl-weekly-checkin and ixl-daily-checkin — no SKILL.md, never invoked directly. type:module here is what lets tsc resolve this file's module kind under node16/nodenext when a caller's own tsconfig reaches across the folder boundary to typecheck it."
+}

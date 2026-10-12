@@ -4,13 +4,15 @@ node_modules
 # transient playwright-cli snapshots/console logs — can capture page content
 .playwright-cli/
 
-# used by the .agents/skills/skylight-homework and ixl-weekly-checkin skills
+# used by the .agents/skills/skylight-homework, ixl-weekly-checkin, and
+# ixl-daily-checkin skills
 *.local.json
 
 # used for /address-pr-feedback skill
 .scratch
 
-# used by the .agents/skills/ixl-weekly-checkin skill (IXL login + Sheets creds)
+# used by the .agents/skills/_ixl-shared (IXL login, shared), ixl-weekly-checkin
+# (Sheets creds), and ixl-daily-checkin (none yet) skills
 .env
 
 # used by sisyphus agent
