@@ -82,6 +82,7 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[teach](./skills/teach/SKILL.md)**: Teach the user a new skill or concept within this workspace.
 - **[to-questionnaire](./skills/to-questionnaire/SKILL.md)**: Turn a decision you can't fully answer into a questionnaire for someone else to fill in.
 - **[wait-what](./skills/wait-what/SKILL.md)**: Re-pitch the last message the moment it didn't land, in plain English.
+- **[i-have-adhd](./skills/i-have-adhd/SKILL.md)**: Shape every response for an ADHD reader — lead with the next action, number multi-step work, restate state across turns, cap lists, cut preamble/recap. Model-invoked only via `/i-have-adhd`; stays on until "stop adhd mode".
 - **[find-skills](./skills/find-skills/SKILL.md)**: Discover and install agent skills that might already exist for what you're trying to do.
 - **[skill-to-command](./skills/skill-to-command/SKILL.md)**: Create an opencode command wrapper that pins a specific model to an existing skill.
 - **[writing-for-agents](./skills/writing-for-agents/SKILL.md)**: Writing documents for agents — skills, `AGENTS.md`/`CLAUDE.md`, anything an agent reaches by a pointer.

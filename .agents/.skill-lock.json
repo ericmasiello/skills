@@ -257,6 +257,15 @@
       "pluginName": "mattpocock-skills",
       "installedAt": "2026-08-20T14:44:04.618Z",
       "updatedAt": "2026-08-20T14:44:04.618Z"
+    },
+    "i-have-adhd": {
+      "source": "ayghri/i-have-adhd",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/ayghri/i-have-adhd.git",
+      "skillPath": "skills/i-have-adhd/SKILL.md",
+      "skillFolderHash": "759f1e56d0d2fdd3819d2a53b81e72767c08d914",
+      "installedAt": "2026-10-14T15:55:48.798Z",
+      "updatedAt": "2026-10-14T15:55:48.798Z"
     }
   },
   "dismissed": {
