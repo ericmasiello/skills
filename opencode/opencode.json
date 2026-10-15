@@ -122,5 +122,8 @@
       "~/.local/share/opencode/worktree/**": "allow",
       "~/.config/opencode/**": "allow"
     }
-  }
+  },
+  "plugins": [
+    "@openchamber/opencode-claude@1.4.1"
+  ]
 }
