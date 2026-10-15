@@ -1,0 +1,42 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Project-local override: the global config (opencode/opencode.json,
+  // symlinked to ~/.config/opencode/opencode.json) keeps skylight disabled
+  // by default for every project on this machine. This repo is where the
+  // Skylight-dependent skills (ixl-daily-checkin, ixl-weekly-checkin,
+  // skylight-homework, skylight-spelling-lessons) actually live, so it's
+  // the one place that needs the server turned on. A project config has
+  // higher precedence than global and replaces the entire named server
+  // object, so this repeats skylight's full definition rather than just
+  // flipping a flag.
+  "mcp": {
+    "servers": {
+      "skylight": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "skylight-mcp"
+        ],
+        "environment": {
+          // Works around an OpenCode bug, not a skylight-mcp one: OpenCode's
+          // MCP client advertises elicitation.form support during the
+          // handshake, but never answers an elicitation/create request back
+          // (the form is created for session "global" instead of the calling
+          // session, so no prompt ever renders). Any confirm-gated skylight
+          // tool (skylight_clear_list, bulk deletes, uploads, invites, etc.)
+          // then hangs until some outer timeout kills the call — ~600s via
+          // Code Mode. skylight-mcp's own confirm-write helper
+          // (@chrischall/mcp-utils) already ships this env var as the
+          // official escape hatch: it skips elicitation entirely and falls
+          // back to a two-step preview + confirmToken flow instead. Scoped to
+          // this one server via its own `environment`, not a global env var,
+          // so other MCP servers still get real confirmation prompts.
+          // Tracking: https://github.com/anomalyco/opencode/issues/51856
+          // (fix in progress — PR #53608). Safe to remove once that lands.
+          "MCP_CONFIRM_ELICITATION": "off"
+        }
+      }
+    }
+  }
+}
