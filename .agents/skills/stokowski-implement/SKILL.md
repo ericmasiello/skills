@@ -39,9 +39,26 @@ Canonical source: the `workflows:` block in `/Users/emasiello/Sites/stokowski-co
 | `repo:studio` (default) | `studio.git` |
 | `repo:calcifer` | `studio-calcifer.git` |
 | `repo:stokowski-configs` | `stokowski-configs.git` |
+| `repo:stokowski` | `stokowski.git` |
+
+Canonical source: the `repos:` block in the same `workflow.yaml` as above — re-derive this table from it if the two disagree.
 
 1. If the ticket already carries a `repo:*` label, keep it — don't re-infer.
-2. Otherwise, infer from the ticket/prompt context (a mention of "calcifer" or "sim-framework" → `repo:calcifer`; a mention of the Stokowski config repo itself → `repo:stokowski-configs`) or default to `repo:studio`.
+2. Otherwise, infer from the ticket/prompt context (a mention of "calcifer" → `repo:calcifer`; a mention of the Stokowski config repo itself → `repo:stokowski-configs`; a mention of the Stokowski service/codebase itself → `repo:stokowski`) or default to `repo:studio`.
+3. If the ticket or prompt targets a repo that isn't in the table, use the dynamic fallback below instead of defaulting to `repo:studio`.
+
+### Dynamic fallback (repo not in the table)
+
+The `repos.dynamic` entry in `workflow.yaml` uses `url_template: "{{ repo_name }}"` — no transformation — so for a dynamic repo **the label value is the full HTTPS clone URL, verbatim**, not a slug:
+
+```
+repo:https://gitlab.com/vistaprint-org/<subgroup>/<repo>.git
+```
+
+1. Resolve the repo's full HTTPS clone URL (ask with the `question` tool if it isn't clear from the ticket/prompt).
+2. Read `repos.dynamic.allowed_url_prefixes` live from `workflow.yaml` — don't hardcode it; teams scope it differently.
+3. URL starts with an allowed prefix → use `repo:<full-clone-url>` as the label. (Jira labels can't contain spaces or commas; `:` `/` `.` `-` are fine.)
+4. URL outside every allowed prefix → stop and tell the user. Stokowski refuses to clone it; don't guess or silently fall back to the default repo.
 
 ## 4. Check readiness
 
