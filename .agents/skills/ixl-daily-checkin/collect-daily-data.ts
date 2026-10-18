@@ -12,15 +12,17 @@
 // than taking a --mode flag, so a caller can never pass a mismatched mode:
 //   - Mon-Fri ("weekday"): just today, target 15 minutes.
 //   - Sat ("saturday"): just today, target 15 minutes — EXCEPT if zero
-//     minutes are logged at all, which reports action "skip" (Saturday is
-//     deliberately flexible; a busy Saturday with no practice yet isn't a
-//     shortfall, it's a day not started). Any non-zero amount under target
-//     is a real shortfall, same as a weekday.
-//   - Sun ("sunday"): Saturday + Sunday summed together against a
-//     30-minute combined target (2 x 15) — Sunday is the makeup day for
-//     whatever Saturday came up short (including a skipped/zero Saturday),
-//     so the two days' minutes are pooled rather than checked separately.
-//     No skip-if-zero exception here; Sunday is the last chance.
+//     minutes are logged at all, which reports action "skip" (the weekend
+//     is one 15-minute unit and we can't know which day the kids will do
+//     it, so no practice yet isn't a shortfall, it's a day not started).
+//     Any non-zero amount under target is a real shortfall, same as a
+//     weekday.
+//   - Sun ("sunday"): Saturday + Sunday summed together against the same
+//     15-minute target — the weekend is ONE day's worth of practice, not
+//     two. A Saturday that cleared 15 passes; a partial Saturday (already
+//     alerted on Saturday) only needs the remainder; a zero Saturday means
+//     Sunday owes the full 15. No skip-if-zero exception here; Sunday is
+//     the last chance.
 //
 // Usage:
 //   node --experimental-strip-types collect-daily-data.ts <child> [--date=YYYY-MM-DD]
@@ -95,7 +97,7 @@ function decide(mode: Mode, dateRange: { start: string; end: string }, totalMinu
   if (mode === 'saturday' && totalMinutes === 0) {
     return { target: null, shortfallMinutes: 0, action: 'skip' };
   }
-  const target = mode === 'sunday' ? DAILY_TARGET_MINUTES * 2 : DAILY_TARGET_MINUTES;
+  const target = DAILY_TARGET_MINUTES;
   const shortfallMinutes = roundUpTo5(Math.max(0, target - totalMinutes));
   return { target, shortfallMinutes, action: shortfallMinutes > 0 ? 'shortfall' : 'ok' };
 }

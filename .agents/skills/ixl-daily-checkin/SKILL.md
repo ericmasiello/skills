@@ -1,6 +1,6 @@
 ---
 name: ixl-daily-checkin
-description: "Check whether each kid cleared the daily IXL time floor (Mon-Fri same-morning, Sat/Sun with weekend rules), and if not, drop a Skylight catch-up chore on their day plus an Apple Reminder so Eric follows up. Use when the user says 'run my IXL daily check-in', 'did the kids do their IXL today', or as the scheduled daily/weekend prompt."
+description: "Check whether each kid cleared the daily IXL time floor (Mon-Fri same-morning, Sat/Sun treated as one 15-minute weekend unit), and if not, drop a Skylight catch-up chore on their day plus an Apple Reminder so Eric follows up. Use when the user says 'run my IXL daily check-in', 'did the kids do their IXL today', or as the scheduled daily/weekend prompt."
 ---
 
 # IXL Daily Check-In
@@ -21,8 +21,8 @@ node --env-file=../_ixl-shared/.env collect-daily-data.ts <child>
 Run once per name in `config.local.json`, in parallel. No `--date` flag in normal use — the script reads today's real date and derives everything from it:
 
 - **Mon-Fri**: checks today alone against a 15-minute target.
-- **Sat**: checks today alone against 15 minutes too, **except** if literally zero minutes are logged, which reports `action: "skip"` instead of a shortfall — Saturday is deliberately flexible, so a busy Saturday with no practice yet isn't treated as a miss.
-- **Sun**: checks Saturday + Sunday **summed together** against a 30-minute combined target, since Sunday is the makeup day for whatever Saturday came up short (including a skipped Saturday). No skip-if-zero exception here — Sunday is the last chance before the week moves on.
+- **Sat**: checks today alone against 15 minutes too, **except** if literally zero minutes are logged, which reports `action: "skip"` instead of a shortfall. The weekend is treated as one unit (we don't know which day the kids will practice), so no practice yet on Saturday isn't a miss. If they did *some* practice but under 15, it's a real shortfall, handled exactly like a weekday.
+- **Sun**: checks Saturday + Sunday **summed together** against the same 15-minute target (the weekend is one day's worth of practice, not two). A Saturday that already cleared 15 passes; a partial Saturday only needs the remainder; a skipped Saturday means Sunday owes the full 15. No skip-if-zero exception here — Sunday is the last chance before the week moves on.
 
 The script prints one JSON `Decision` object per call: `mode`, `dateRange`, `totalMinutes`, `target` (`null` on a skip), `shortfallMinutes` (already rounded up to the nearest 5 — e.g. a 3-minute or 4-minute gap both round up to 5), and `action` (`"ok"` | `"shortfall"` | `"skip"`).
 
@@ -32,7 +32,7 @@ If the script throws instead of printing JSON — wrong secret word, IXL demands
 
 **`action: "ok"`** — nothing to do. Note it in the final report and move on.
 
-**`action: "skip"`** — nothing to do either, but say so explicitly in the report (e.g. "Hunter: Saturday, 0 minutes logged yet — skipped per the flexible-Saturday rule") so a quiet report isn't mistaken for "checked and fine."
+**`action: "skip"`** — no Skylight chore and no Apple Reminder (the weekend's 15 minutes may still land on Sunday), but say so explicitly in the report (e.g. "Hunter: Saturday, 0 minutes logged yet — skipped per the flexible-Saturday rule") so a quiet report isn't mistaken for "checked and fine."
 
 **`action: "shortfall"`** — attempt **a**, then always do **b** regardless of how **a** went, then **c** only if **a** failed:
 
@@ -91,4 +91,4 @@ One line per child: the mode checked, minutes logged vs. target (or "skipped —
 - **The Reminder's due time (4pm) is a fixed guess, not derived from anything** — it assumes "after school" without actually knowing the school's dismissal time or either kid's actual schedule.
 - **Reminders.app's AppleScript dictionary cannot be read or filtered reliably from this skill** (see Step 2b) — there is no scripted way to confirm a reminder was actually created, re-fetch it, or clean one up; "the `osascript` call didn't throw" is the only signal available. This applies to Step 2c's diagnostic reminder too — if creating *that* reminder also fails, there's no further fallback behind it; say so plainly in Step 3's report instead.
 - **Step 2c's diagnostic detail is only as good as whatever the failed Skylight call actually returned** — a tool that's entirely unavailable (e.g. the `skylight` MCP server not running) gives much less to go on than a tool that ran and returned a real error, so some Step 2c reminders will be more useful than others. Not something this skill can improve on its own; it reports whatever surfaced.
-- **Sunday's combined 30-minute target assumes Saturday's own shortfall (if any) already got its own separate chore/reminder on Saturday** — this skill doesn't suppress or merge that; a kid short both days can see two separate chores (one from Saturday's run, one from Sunday's) and two reminders. Not treated as a bug, since each is accurate to its own run — but worth knowing if the overlap ever looks confusing in practice.
+- **Sunday's combined window assumes Saturday's own shortfall (if any) already got its own separate chore/reminder on Saturday** — this skill doesn't suppress or merge that; a kid who logged a partial Saturday and still falls short on Sunday can see two separate chores (one from Saturday's run, one from Sunday's) and two reminders. Not treated as a bug, since each is accurate to its own run (Sunday's counts the Saturday minutes, so its shortfall is only what's still missing) — but worth knowing if the overlap ever looks confusing in practice.
