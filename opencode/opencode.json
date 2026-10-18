@@ -95,6 +95,19 @@
         // root-level opencode.json, since that's the one place the
         // Skylight-dependent skills actually live.
         "disabled": true
+      },
+      "n8n": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@nextoolsolutions/mcp-n8n"
+        ],
+        "environment": {
+          "N8N_BASE_URL": "https://automation.vista.io",
+          "N8N_API_KEY": "{env:N8N_API_KEY}"
+        },
+        "enabled": false
       }
     }
   },
