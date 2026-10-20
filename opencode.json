@@ -34,7 +34,11 @@
           // so other MCP servers still get real confirmation prompts.
           // Tracking: https://github.com/anomalyco/opencode/issues/51856
           // (fix in progress — PR #53608). Safe to remove once that lands.
-          "MCP_CONFIRM_ELICITATION": "off"
+          "MCP_CONFIRM_ELICITATION": "off",
+          // Credentials come from the shell environment (~/.zshrc), never
+          // inline. OpenCode must be launched from a shell that has them.
+          "SKYLIGHT_EMAIL": "{env:SKYLIGHT_EMAIL}",
+          "SKYLIGHT_PASSWORD": "{env:SKYLIGHT_PASSWORD}"
         }
       }
     }
