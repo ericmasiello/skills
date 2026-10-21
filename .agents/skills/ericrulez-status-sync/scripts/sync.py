@@ -44,9 +44,10 @@ BOT_MARKER: str = "\U0001F916 ericrulez-status-sync:"
 PROJECT_JQL: str = "project = ERICRULEZ AND statusCategory != Done AND issuetype != Epic"
 
 # Relationships pulled from the context graph. `jira_work_item_links_jira_work_item_remote_link`
-# is in this list for one reason: Stokowski-authored MRs are linked to their ticket via a
-# custom Jira remote-link app, not the native GitLab dev-panel integration, so they never
-# populate `jira_work_item_links_external_pull_request` at all -- see
+# is in this list because Stokowski-authored MRs reach their ticket only through Jira
+# remote-link apps -- either Stokowski's own custom one or a plain GitLab weblink -- never
+# through the native GitLab dev-panel integration, so they never populate
+# `jira_work_item_links_external_pull_request` at all -- see
 # `augment_relationships_with_stokowski_mrs` for how this gets folded back into the same
 # evidence shape the rest of `classify()` already understands.
 RELATIONSHIPS: str = (
@@ -54,7 +55,6 @@ RELATIONSHIPS: str = (
     "jira_work_item_links_external_commit,"
     "jira_work_item_links_jira_work_item_remote_link"
 )
-STOKOWSKI_MR_APP_TYPE: str = "com.stokowski.mr"
 _GITLAB_MR_URL_RE = re.compile(r"gitlab\.com/(?P<path>.+)/-/merge_requests/(?P<iid>\d+)")
 
 RANK_NO_EVIDENCE = 0
@@ -286,18 +286,31 @@ def fetch_gitlab_mr(url: str, cache: dict[str, Optional[dict[str, Any]]]) -> Opt
 def augment_relationships_with_stokowski_mrs(
     relationships: list[dict[str, Any]], glab_cache: dict[str, Optional[dict[str, Any]]]
 ) -> list[dict[str, Any]]:
-    """Fold Stokowski-linked MRs into a synthetic `jira_work_item_links_external_pull_request`
+    """Fold GitLab-MR remote links into a synthetic `jira_work_item_links_external_pull_request`
     target so classify()'s existing exact-key gate and Done/In-Review scoring apply to them
     unchanged -- see the confirmed live cases (ERICRULEZ-62, -162, -163) in SKILL.md's
     "Known false positives" section for why this relationship needs live GitLab resolution
     rather than trusting anything already on the Jira side.
+
+    Matches on the target's URL being a GitLab MR link, not on `applicationType ==
+    com.stokowski.mr` + `relationship == "implemented by"` (the original, narrower check).
+    Confirmed live on ERICRULEZ-235: its own MR (!499, title and sourceBranch both
+    containing the key) was linked only via a plain `JiraWebRemoteIssueLink` with
+    `applicationType: None` and `relationship: "mentioned on"` -- no custom
+    "implemented by" link ever posted -- so the narrower check missed it entirely and
+    the ticket sat at "In Progress" with a live open MR for its own key. The exact-key
+    gate in `classify()` still does the real filtering (against the MR's live title/
+    sourceBranch from GitLab, not the Jira-side link name), so widening this match to
+    "any GitLab MR URL" rather than "only Stokowski's own custom link" doesn't relax
+    that gate -- confirmed against ERICRULEZ-213/-156/-231's shared, differently-keyed
+    MRs, which still correctly fail the gate once resolved.
     """
     synthesized: list[dict[str, Any]] = []
     for r in relationships:
         if r.get("relationshipName") != "jira_work_item_links_jira_work_item_remote_link":
             continue
         for target in r.get("targets", []):
-            if target.get("applicationType") != STOKOWSKI_MR_APP_TYPE or target.get("relationship") != "implemented by":
+            if not _GITLAB_MR_URL_RE.search(target.get("url", "") or ""):
                 continue
             mr = fetch_gitlab_mr(target.get("url", ""), glab_cache)
             if mr is None:
