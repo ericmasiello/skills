@@ -44,10 +44,11 @@ BOT_MARKER: str = "\U0001F916 ericrulez-status-sync:"
 PROJECT_JQL: str = "project = ERICRULEZ AND statusCategory != Done AND issuetype != Epic"
 
 # Relationships pulled from the context graph. `jira_work_item_links_jira_work_item_remote_link`
-# is in this list for one reason: Stokowski-authored MRs are linked to their ticket via a
-# custom Jira remote-link app, not the native GitLab dev-panel integration, so they never
-# populate `jira_work_item_links_external_pull_request` at all -- see
-# `augment_relationships_with_stokowski_mrs` for how this gets folded back into the same
+# is in this list for two reasons: Stokowski-authored MRs are linked to their ticket via a
+# custom Jira remote-link app, and some human-authored MRs only reach Jira's generic
+# "mentioned on" GitLab remote link -- neither populates
+# `jira_work_item_links_external_pull_request` at all -- see
+# `augment_relationships_with_remote_link_mrs` for how both get folded back into the same
 # evidence shape the rest of `classify()` already understands.
 RELATIONSHIPS: str = (
     "jira_work_item_links_external_pull_request,"
@@ -283,21 +284,43 @@ def fetch_gitlab_mr(url: str, cache: dict[str, Optional[dict[str, Any]]]) -> Opt
     return data
 
 
-def augment_relationships_with_stokowski_mrs(
+def _is_mr_remote_link(target: dict[str, Any]) -> bool:
+    """A `jira_work_item_links_jira_work_item_remote_link` target counts as MR evidence
+    needing live GitLab resolution in two confirmed shapes:
+
+    1. The custom Stokowski app type (`com.stokowski.mr`, relationship `implemented by`)
+       -- see ERICRULEZ-62, -162, -163 in SKILL.md's "Known false positives" section.
+    2. Jira's own generic "mentioned on" GitLab remote link (`JiraWebRemoteIssueLink`,
+       name starting "Merge request - ", no `applicationType` at all) -- confirmed live
+       on ERICRULEZ-291 (Stokowski-authored MR 795) and ERICRULEZ-283 (human-authored MR
+       23): both had their only MR evidence sitting *exclusively* here, with zero native
+       `jira_work_item_links_external_pull_request` entry at all. Same blind spot as
+       pattern 1, just not Stokowski-specific -- any MR that only "mentions" the ticket
+       (rather than getting the full GitLab-Jira dev-panel smart link) is invisible
+       without this.
+    """
+    if target.get("applicationType") == STOKOWSKI_MR_APP_TYPE and target.get("relationship") == "implemented by":
+        return True
+    if target.get("relationship") == "mentioned on" and str(target.get("name", "")).startswith("Merge request - "):
+        return True
+    return False
+
+
+def augment_relationships_with_remote_link_mrs(
     relationships: list[dict[str, Any]], glab_cache: dict[str, Optional[dict[str, Any]]]
 ) -> list[dict[str, Any]]:
-    """Fold Stokowski-linked MRs into a synthetic `jira_work_item_links_external_pull_request`
-    target so classify()'s existing exact-key gate and Done/In-Review scoring apply to them
-    unchanged -- see the confirmed live cases (ERICRULEZ-62, -162, -163) in SKILL.md's
-    "Known false positives" section for why this relationship needs live GitLab resolution
-    rather than trusting anything already on the Jira side.
+    """Fold remote-link-only MRs (see `_is_mr_remote_link`) into a synthetic
+    `jira_work_item_links_external_pull_request` target so classify()'s existing
+    exact-key gate and Done/In-Review scoring apply to them unchanged -- the gate
+    itself (title or sourceBranch, never destinationBranch) doesn't need to change
+    just because the MR surfaced through a remote link instead of the native relation.
     """
     synthesized: list[dict[str, Any]] = []
     for r in relationships:
         if r.get("relationshipName") != "jira_work_item_links_jira_work_item_remote_link":
             continue
         for target in r.get("targets", []):
-            if target.get("applicationType") != STOKOWSKI_MR_APP_TYPE or target.get("relationship") != "implemented by":
+            if not _is_mr_remote_link(target):
                 continue
             mr = fetch_gitlab_mr(target.get("url", ""), glab_cache)
             if mr is None:
@@ -474,7 +497,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         current = cand_by_key[key]
         current_rank = rank_of(current["status"], current["status_category_key"])
         rels: list[dict[str, Any]] = full.get(key, {}).get("relationships", [])
-        rels = augment_relationships_with_stokowski_mrs(rels, glab_cache)
+        rels = augment_relationships_with_remote_link_mrs(rels, glab_cache)
         if not rels:
             continue
 
