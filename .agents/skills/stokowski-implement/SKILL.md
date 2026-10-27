@@ -21,16 +21,23 @@ Canonical source: the `workflows:` block in `/Users/emasiello/Sites/stokowski-co
 
 | Workflow label | Name | Use case | Inference keywords |
 |---|---|---|---|
-| `workflow:eric` | Direct Implement (default) | Code, test, revise/unslop comments, draft MR, review, merge — no planning | "implement", "work on this", "fix this", "do this" |
+| `workflow:eric` | Direct Implement (default) | Code, test, revise/unslop comments, draft MR, review, merge — no planning | "implement", "work on this", "fix this", "do this", "quick mr", "quick fix", "small change" |
 | `workflow:coverage-audit` | Coverage Audit | Dispatches `coverage-auditor`, drafts a ticket backlog, gates for review, publishes tickets | "coverage audit", "audit coverage", "audit tests", "test backlog" |
 | `workflow:coverage-execute` | Coverage Execute | Executes test characterization/uplift items from a plan, mutation-review gate, opens MR | "coverage execute", "execute coverage", "write tests from plan" |
 | `workflow:install-mutation-testing` | Install Mutation Testing | Installs/scaffolds whatever mutation-testing tool `mutation-readiness.mjs` selects for the target repo's platform, until it reports "installed and configured"; fails closed (no commit, no MR) on any incompatibility. Optional prerequisite for `coverage-auditor` — not a CI integration, not a mutation run | "mutation testing", "add mutation testing", "mutation testing library", "install stryker", "set up mutation testing" |
-| `workflow:quick-mr` | Quick MR | Light plan, implement, review, risk score, automated merge wait | "quick mr", "quick fix", "small change" |
-| `workflow:quick-mr-with-compound` | Quick MR + Compound | Same as Quick MR, plus a compound-learnings step before risk score | "compound", "quick mr compound", "record learnings" |
+| `workflow:quick-mr-with-compound` | Quick MR + Compound | Light plan, implement, review, compound learnings, risk score, merge wait | "compound", "record learnings" |
 | `workflow:full-ce` | Full CE (deep plan) | Full plan + plan-review gate, implement, review, compound, risk score, merge wait | "full ce", "plan first", "architecture plan", "deep plan" |
 | `workflow:triage` | Triage | Classify before routing (not the default on this team) | "triage", "classify" |
 
-1. If the prompt names a workflow explicitly or matches a keyword above, use it.
+### Retired: do not use `workflow:quick-mr`
+
+Don't offer `workflow:quick-mr`. In the `ericrulez` config the `implement` state runs `ericrulez-implement.md`, which forbids `git push` and any `glab mr` call and delegates both to an `open-draft-mr` stage. `workflow:quick-mr`'s path has no `open-draft-mr` stage, so nothing ever pushes the branch or opens the MR, and the run deadlocks at `merge_wait` waiting for a merge that cannot happen (ERICRULEZ-292, 2026-10-26). Requests for "quick mr" / "quick fix" / "small change" resolve to `workflow:eric`.
+
+### Guard: the resolved path must contain a stage that opens the MR
+
+Before applying a `workflow:*` label, read that workflow's `path` in `workflow.yaml` and confirm it contains `open-draft-mr`, `coverage-open-draft-mr`, or `install-mutation-open-draft-mr` — unless the workflow makes no code changes at all (`triage`, `coverage-audit`). While `implement` is commit-only, any path without such a stage stalls before an MR exists.
+
+1. If the prompt names a workflow explicitly or matches a keyword above, use it. A request for `workflow:quick-mr` resolves to `workflow:eric`.
 2. Otherwise, present the table as a `question` tool menu (one question, options = the human-readable names) — don't guess silently; the wrong workflow runs a materially different playbook, not just a differently-worded one.
 
 ## 3. Resolve the repo label
