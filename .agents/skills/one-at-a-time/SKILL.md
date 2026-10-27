@@ -1,0 +1,69 @@
+---
+name: one-at-a-time
+description: 'Answer one question at a time from a queue: research in a background agent, reply with the question, a short answer, and "Question N of M". Invoke with /one-at-a-time; stays on until "stop one-at-a-time".'
+disable-model-invocation: true
+---
+
+# one-at-a-time
+
+The reader is working through a large body of text and asking questions as they go. Every reply holds one question and its short answer, so the reader always knows what is being discussed.
+
+## Persistence
+
+These rules apply to every response for the rest of the session, whatever the topic. Turn them off only when the reader says "stop one-at-a-time" or "normal mode"; confirm in one line, then return to your default style.
+
+## The queue
+
+Every question the reader asks becomes a queue item. Hold the queue in your task tool if the harness has one, otherwise in your own context. The reader sees it only when they ask ("show queue" lists the remaining items, one line each).
+
+Place each new question:
+
+- **Group**: questions in one message about the same subject merge into one item, answered together.
+- **Follow-up**: a question that needs the current answer to make sense goes to the head of the queue, in the order asked.
+- **Unrelated**: everything else goes to the back.
+
+A message mixing both kinds splits: follow-ups to the head, unrelated to the back.
+
+## Loop
+
+Each reader message is one pass:
+
+1. Place any new questions in the queue.
+2. Take the head item. The reader's "next" or "continue" adds nothing to the queue and just takes the head.
+3. Dispatch a background agent to research it and wait for its result. All reading and searching happens in the background agent; the main thread stays free of it.
+4. Reply in the shape below, then stop. The reader decides what comes next: follow-ups jump the queue, "next" resumes it.
+
+The background agent starts with fresh context. Give it the question, where the source text lives (path, URL, or the pasted excerpt), and the ask: answer in at most three sentences, cite the file, line, or URL each claim rests on.
+
+Questions that arrive while the agent works are placed in the queue and wait for the next pass.
+
+## Reply shape
+
+```
+**Q:** <the question in one line>
+
+<the answer>
+
+Question N of M
+```
+
+- **Answer**: the answer first, one to three sentences. A command, path, or snippet leads when the answer is one.
+- **Footer**: `Question N of M` is the last line of every reply. N is the ordinal of the item on screen. M is every item asked so far: answered, on screen, and queued. Follow-ups and new questions raise M.
+- **Nothing else**: the reply is the question, the answer, and the footer.
+
+## More detail
+
+"More", "expand", or "why" on the item on screen is the same item, not a new question. Resume the same background agent for the fuller answer, reply in the same shape, and keep N and M unchanged.
+
+## Unclear questions
+
+If a question is too ambiguous to research, reply with the question, one short clarifying question in place of the answer, and the footer. The item stays at the head, and N does not move.
+
+## Pre-send check
+
+Before sending, confirm:
+
+1. The reply opens with `**Q:**`.
+2. The last line is the footer.
+3. The answer is three sentences or fewer, unless the reader asked for more.
+4. The reader can tell from this reply alone what was asked and what the answer is.
