@@ -28,12 +28,17 @@ Call `skylight_list_lists()`. Match `label` case-insensitively against the targe
 
 ### Step 3: Replace the contents
 
-1. `skylight_clear_list(listId)` — removes every existing item in one bulk call. Its response's `removed` count is the old item total; a `0` when you expected items means the wrong list.
-2. `skylight_add_list_item(listId, label=<word>)` for each word from Step 1, in parallel, in the order the user gave them.
+Three separate `execute` calls, in this order. Each starts only after the previous one's result is in hand.
+
+1. **Request the clear.** `skylight_clear_list(listId)` is a destructive call, so it answers `status: "confirmation-required"` with a preview of the items to delete and a `confirmToken`. Nothing is deleted yet. The list is untouched, and the old items stay until step 2 completes.
+2. **Gate on the user.** Show the preview, end your turn, and wait for an explicit yes in chat. Then call `skylight_clear_list(listId, confirmToken)`. Done means the response carries a `removed` count equal to the old item total (a `0` when you expected items means the wrong list), then `skylight_get_list_items` returns an empty list.
+3. **Add the words.** Only now call `skylight_add_list_item(listId, label=<word>)` for each word from Step 1, in parallel, in the order the user gave them.
+
+The `confirmToken` is bound to the exact items on the list when it was issued. Adding words first changes that payload, and the clear is then rejected with `DRAFT_CHANGED` (or would delete the new words too). If the list changed after the preview, request a fresh preview, and if the user already approved deleting specific old items, remove just those with `skylight_delete_list_items(listId, item_ids)`.
 
 ### Step 4: Confirm
 
-Report: the list name and id, how many old items were cleared, and the new word count plus the words themselves — so the user can eyeball them against what they pasted.
+Read the list back with `skylight_get_list_items` (sorted by `position`) and report: the list name and id, how many old items were cleared, and the new word count plus the words themselves — so the user can eyeball them against what they pasted.
 
 ## Flow B: Advance to the next list in the lesson sequence
 
@@ -64,7 +69,7 @@ Take the next entry in the sequence (array index + 1).
 
 ### Step 5: Replace the contents
 
-Reuse Flow A's Step 3: `skylight_clear_list`, then `skylight_add_list_item` for each word in the next entry, in parallel, in order.
+Reuse Flow A's Step 3 in full, including the user-approval gate between the clear and the adds, with the next entry's words in order. In the confirmation preview, name the lesson transition (`Skill {a} Lesson {b} → Skill {c} Lesson {d}`) and the incoming words, so a single yes covers the whole change.
 
 ### Step 6: Confirm
 
