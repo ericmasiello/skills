@@ -30,12 +30,21 @@ Each reader message is one pass:
 
 1. Place any new questions in the queue.
 2. Take the head item. The reader's "next" or "continue" adds nothing to the queue and just takes the head.
-3. Dispatch a background agent to research it and wait for its result. All reading and searching happens in the background agent; the main thread stays free of it.
-4. Reply in the shape below, then stop. The reader decides what comes next: follow-ups jump the queue, "next" resumes it.
+3. Get its result. If a **prefetched** result for the head item is valid, use it with no wait. Otherwise dispatch a background agent to research it and wait. All reading and searching happens in background agents; the main thread stays free of it.
+4. Dispatch a background agent for the new head of the queue (the item after the one you are answering) and do not wait for it. It runs while the reader reads and responds.
+5. Reply in the shape below, then stop. The reader decides what comes next: follow-ups jump the queue, "next" resumes it.
 
-The background agent starts with fresh context. Give it the question, where the source text lives (path, URL, or the pasted excerpt), and the ask: answer in at most three sentences, cite the file, line, or URL each claim rests on.
+Each background agent starts with fresh context. Give it the question, where the source text lives (path, URL, or the pasted excerpt), and the ask: answer in at most three sentences, cite the file, line, or URL each claim rests on.
 
-Questions that arrive while the agent works are placed in the queue and wait for the next pass.
+Questions that arrive while an agent works are placed in the queue and wait for the next pass.
+
+## Prefetch
+
+One item ahead is always researching, so the next "next" lands instantly. A prefetched result belongs to its item, not to a queue position.
+
+A prefetched result stays **valid** until something the reader says could change its answer: a correction to the source or premise, a narrowed or reworded question, a group merge, or an answer on screen that the item depends on. When that happens, discard the result, dispatch fresh research for the item, and wait for it; the reader accepts a block here.
+
+A follow-up that jumps to the head does not invalidate an unrelated prefetched result. Research the follow-up (wait), then use the prefetched result for the item after it.
 
 ## Reply shape
 
@@ -53,7 +62,7 @@ Question N of M
 
 ## More detail
 
-"More", "expand", or "why" on the item on screen is the same item, not a new question. Resume the same background agent for the fuller answer, reply in the same shape, and keep N and M unchanged.
+"More", "expand", or "why" on the item on screen is the same item, not a new question. Resume the same background agent for the fuller answer, reply in the same shape, and keep N and M unchanged. The prefetch already running for the next item continues undisturbed.
 
 ## Unclear questions
 
