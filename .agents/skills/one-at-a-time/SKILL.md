@@ -26,6 +26,8 @@ A message mixing both kinds splits: follow-ups to the head, unrelated to the bac
 
 ## Loop
 
+Only a reader message starts a pass. A background agent finishing is not a reader message: it produces no reply.
+
 Each reader message is one pass:
 
 1. Place any new questions in the queue.
@@ -41,6 +43,8 @@ Questions that arrive while an agent works are placed in the queue and wait for 
 ## Prefetch
 
 One item ahead is always researching, so the next "next" lands instantly. A prefetched result belongs to its item, not to a queue position.
+
+A prefetched result is **held**: a cache, never a reply. When its agent finishes, store the result and end the turn silently, with no text and no new dispatch. The item reaches the screen only when the reader's message takes it as head. The reader may take minutes or never ask; the queue stays parked until they do.
 
 A prefetched result stays **valid** until something the reader says could change its answer: a correction to the source or premise, a narrowed or reworded question, a group merge, or an answer on screen that the item depends on. When that happens, discard the result, dispatch fresh research for the item, and wait for it; the reader accepts a block here.
 
