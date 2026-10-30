@@ -145,13 +145,39 @@ def key_lower_in(key: str, *texts: str) -> bool:
 
 
 def load_candidates(jql: str = PROJECT_JQL, first: int = 200) -> list[Candidate]:
-    data = run_twg(["jira", "workitem", "query", "--jql", jql, "--first", str(first)])
-    issues: list[dict[str, Any]] = data["data"]["issues"]
-    if data.get("pageInfo", {}).get("hasNextPage"):
-        raise RuntimeError(
-            f"More than {first} candidates -- twg query --cursor pagination isn't "
-            "wired up here; raise --first or add cursor support before trusting this run."
-        )
+    """Page through `twg jira workitem query` until `pageInfo.hasNextPage` is false.
+
+    `--first` only caps the per-page size `twg` will honor (observed server-side
+    cap: 100, regardless of a higher `--first`), not the total result count --
+    so a single call can silently truncate a board with more candidates than one
+    page. This walks `pageInfo.nextCursor` via `--after` until exhausted rather
+    than raising once a second page is detected, per SKILL.md's "fix the script"
+    guidance for when `twg`'s actual behavior drifts from what was assumed here.
+    """
+    issues: list[dict[str, Any]] = []
+    after: Optional[str] = None
+    guard = 0
+    while True:
+        guard += 1
+        if guard > 50:
+            raise RuntimeError(
+                f"load_candidates: stopped after {guard} pages ({len(issues)} issues so far) -- "
+                "either the board is implausibly large or twg's pageInfo/cursor contract changed."
+            )
+        args = ["jira", "workitem", "query", "--jql", jql, "--first", str(first)]
+        if after:
+            args += ["--after", after]
+        data = run_twg(args)
+        issues.extend(data["data"]["issues"])
+        page_info = data.get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            break
+        after = page_info.get("nextCursor")
+        if not after:
+            raise RuntimeError(
+                "load_candidates: pageInfo.hasNextPage is true but no nextCursor was "
+                "returned -- twg's pagination contract changed; fix this before trusting the run."
+            )
     out: list[Candidate] = []
     for i in issues:
         raw_assignee = i.get("assignee")
