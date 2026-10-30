@@ -144,13 +144,38 @@ def key_lower_in(key: str, *texts: str) -> bool:
     return any(t and pattern.search(t) for t in texts)
 
 
-def load_candidates(jql: str = PROJECT_JQL, first: int = 200) -> list[Candidate]:
-    data = run_twg(["jira", "workitem", "query", "--jql", jql, "--first", str(first)])
-    issues: list[dict[str, Any]] = data["data"]["issues"]
-    if data.get("pageInfo", {}).get("hasNextPage"):
+def load_candidates(jql: str = PROJECT_JQL, first: int = 200, max_pages: int = 20) -> list[Candidate]:
+    """Page through `twg jira workitem query` via its `--after` cursor.
+
+    `--first` is a page-size *request*, not a hard cap we can raise our way out of --
+    the server has its own page-size ceiling (observed: 100 per page) and reports
+    `pageInfo.hasNextPage`/`pageInfo.nextCursor` regardless of what `--first` asked
+    for. So this loops on that cursor rather than trying to fetch everything in one
+    call; `max_pages` is just a sanity backstop against an infinite loop if `twg`
+    ever stops advancing the cursor.
+    """
+    issues: list[dict[str, Any]] = []
+    after: Optional[str] = None
+    for _ in range(max_pages):
+        args = ["jira", "workitem", "query", "--jql", jql, "--first", str(first)]
+        if after:
+            args += ["--after", after]
+        data = run_twg(args)
+        issues.extend(data["data"]["issues"])
+        page_info = data.get("pageInfo", {})
+        if not page_info.get("hasNextPage"):
+            break
+        after = page_info.get("nextCursor")
+        if not after:
+            raise RuntimeError(
+                "twg query reported hasNextPage but returned no nextCursor -- "
+                "can't continue paginating safely."
+            )
+    else:
         raise RuntimeError(
-            f"More than {first} candidates -- twg query --cursor pagination isn't "
-            "wired up here; raise --first or add cursor support before trusting this run."
+            f"Hit the {max_pages}-page pagination backstop while loading candidates -- "
+            "either the board grew far beyond what this skill expects, or twg's cursor "
+            "isn't advancing. Investigate before trusting this run."
         )
     out: list[Candidate] = []
     for i in issues:
