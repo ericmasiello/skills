@@ -34,7 +34,8 @@ Commit following the repo's existing message style (`git log --oneline -10`), pu
 
 ```bash
 git push -u origin HEAD
-gh pr create --fill
 ```
+
+Then compose the PR with the `write-pr-description` skill rather than `gh pr create --fill`. It finds the repo template, fills it, and updates the body when a PR is already open on the branch; `--fill` derives title and body from commit subjects and does neither.
 
 See `docs/agents/issue-tracker.md` for `gh` conventions and for linking the PR back to an issue if one exists.

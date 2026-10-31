@@ -68,6 +68,10 @@ All of the above run on the free tier (no Rovo Credits). Cross-product "Enriched
 
 Without the explicit `markdown` format flag, Jira treats Markdown syntax as plain/HTML text and stores unrendered literal characters (e.g. `## Heading`, `- [ ]`, backticks) instead of compiling into native Atlassian Document Format (ADF) nodes.
 
+### Search index lags writes — don't verify a just-made change with `workitem query`
+
+(Gap found 2026-10-29.) Immediately after a `twg jira workitem update` (e.g. a priority-field change), a `twg jira workitem query` JQL search can still return stale results for a few seconds — including omitting the issue you just changed, or showing its old field value, even when the query's own filter should exclude/include it based on the new value. This is index lag, not a failed write. To verify a write landed, read the issue directly instead: `twg jira workitem get <key> --field <field>` (or `--full`) hits the issue API, not the search index, and reflects the write immediately. Reserve `workitem query`/JQL for discovery across many issues, not for confirming a single just-made edit.
+
 ## MCP Fallback Protocol
 
 Only needed if `twg` isn't installed/authenticated. The Rovo MCP server (`io.vista/atlassian-mcp`) is **disabled by default**.
