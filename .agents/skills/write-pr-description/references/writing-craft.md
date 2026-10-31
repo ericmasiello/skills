@@ -74,9 +74,33 @@ Use `// NEW` instead of a before/after pair for anything purely additive. Omit t
 Reach for a visual aid only when prose would leave the reviewer unable to reconstruct the mental model. Choose by shape:
 
 - **Mermaid** — the change has topology: components with directed relationships (calls, flows, dependencies, state transitions). A table cannot show edges; don't substitute one for an architecture diagram with 3+ interacting components.
+- **ASCII data-flow diagram** — the change slots one element into an existing flow of 3+ stages, and the reviewer needs that flow to judge it: what feeds the new element, what consumes it, and which stages don't exist yet.
 - **Markdown table** — the change has parallel variation of one shape: N things sharing attributes but differing in values (before/after measurements, option trade-offs, flag matrices).
 
-Ask: does the information have edges (A → B) or rows (attribute × variant)? Edges → Mermaid. Rows → table. Skip any visual when the sizing table above already routed to 1-2 sentences, or the diagram would just restate the diff.
+Both edge shapes draw arrows; they differ in what the arrows are anchored to. Mermaid draws the topology the change introduces. ASCII draws the system the change lands in, with the delta marked inside it, and it is the only one of the two that can show a stage the change feeds into but nothing consumes.
+
+Draw the baseline unmarked and decorate only the delta: `◀ added by this MR` plus a `file:line` on the same line. Mark absence explicitly (`✗ NO CONSUMER`, `[not built]`) when a gap is what the reviewer has to weigh. Label edges with the artifact that travels them (`│ partition.json`), not with an action. Reuse the body's stage letters (A, B, C) when it names stages, so diagram and prose stay addressable. Hand-align the box-drawing characters; a misaligned diagram reads as a broken change.
+
+```
+  MR opened / pushed
+         │
+         ▼
+  ┌──────────────────┐
+  │ MR pipeline      │
+  └────────┬─────────┘
+           │
+   ┌───────┴────────────────────────────┐
+   ▼                                    ▼
+┌───────────────────────┐   ┌──────────────────────────────┐
+│ ai-code-review        │   │ ui-change-detector-shadow    │ ◀ added by this MR
+│ whole-MR review       │   │ prefilter ─▶ output.jsonl    │   (.gitlab-ci.yml:767)
+└──────────┬────────────┘   └──────────────┬───────────────┘
+           │                               │ per-unit records
+           ▼                               ▼
+                                       ✗ NO CONSUMER
+```
+
+Ask: does the information have edges (A → B), rows (attribute × variant), or a slot (this change inside a flow larger than the diff)? Edges → Mermaid. Rows → table. A slot → ASCII, one panel per time-state (`TODAY — what runs`, `INTENDED — what this unblocks`), and past ~30 lines move the per-file detail into a table beside it. Skip any visual when the sizing table above already routed to 1-2 sentences, or the diagram would just restate the diff.
 
 ## I. Writing voice and principles
 
