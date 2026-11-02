@@ -145,13 +145,34 @@ def key_lower_in(key: str, *texts: str) -> bool:
 
 
 def load_candidates(jql: str = PROJECT_JQL, first: int = 200) -> list[Candidate]:
-    data = run_twg(["jira", "workitem", "query", "--jql", jql, "--first", str(first)])
-    issues: list[dict[str, Any]] = data["data"]["issues"]
-    if data.get("pageInfo", {}).get("hasNextPage"):
-        raise RuntimeError(
-            f"More than {first} candidates -- twg query --cursor pagination isn't "
-            "wired up here; raise --first or add cursor support before trusting this run."
-        )
+    """Load every matching ticket, following `twg`'s cursor (`--after`) across
+    pages -- confirmed live that `twg jira workitem query` caps each page at
+    100 issues regardless of the `--first` value passed, so a 200+ ticket
+    board needs real pagination, not a bigger single request. `first` here is
+    a total safety cap across all pages (fail loudly rather than page forever
+    if the board unexpectedly has far more candidates than expected), not a
+    page size.
+    """
+    page_size = 100
+    issues: list[dict[str, Any]] = []
+    cursor: Optional[str] = None
+    while True:
+        cmd = ["jira", "workitem", "query", "--jql", jql, "--first", str(page_size)]
+        if cursor:
+            cmd += ["--after", cursor]
+        data = run_twg(cmd)
+        issues.extend(data["data"]["issues"])
+        if len(issues) > first:
+            raise RuntimeError(
+                f"More than {first} candidates -- raise --first if the board "
+                "legitimately has that many open, non-Epic tickets."
+            )
+        page_info = data.get("pageInfo", {})
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("nextCursor")
+        if not cursor:
+            raise RuntimeError("twg reported hasNextPage=true but returned no nextCursor to follow.")
     out: list[Candidate] = []
     for i in issues:
         raw_assignee = i.get("assignee")
@@ -593,7 +614,9 @@ def main() -> int:
     p_run = sub.add_parser("run", help="Full pipeline: query, gate, classify, apply low-risk + high-confidence moves")
     p_run.add_argument("--dry-run", action="store_true", help="Compute everything, apply nothing")
     p_run.add_argument("--since", default="365d", help="Context lookback window (default: 365d)")
-    p_run.add_argument("--first", type=int, default=200, help="Max candidates to load (default: 200)")
+    p_run.add_argument(
+        "--first", type=int, default=500, help="Total candidate safety cap across all pages (default: 500)"
+    )
 
     p_resolve = sub.add_parser("resolve-done", help="Record a user answer from step 6 and apply it")
     p_resolve.add_argument("--key", required=True)
