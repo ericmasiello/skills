@@ -17,7 +17,7 @@ Requires `twg` authenticated against `vistaprint.atlassian.net` (see [`vista-atl
 python3 <this-skill>/scripts/scan.py
 ```
 
-Resolve `<this-skill>` to the directory holding this `SKILL.md` (e.g. `~/.agents/skills/stokowski-stuck-check`). The script prints one JSON document and takes about 35 seconds: one label query, one `stok list` per project, one batched ticket hydrate, a `stok status` call for each work item that needs explaining, and a GitLab check for every ticket whose stage claims a merge request.
+Resolve `<this-skill>` to the directory holding this `SKILL.md` (e.g. `~/.agents/skills/stokowski-stuck-check`). The script prints one JSON document and takes about 45 seconds: one label query, one `stok list` per project, one batched ticket hydrate, a `stok status` call for each work item that needs explaining, a GitLab check for every ticket whose stage claims a merge request, and a Jira comment read for every audit gate.
 
 - `--board ERICRULEZ` limits to one board (repeatable).
 - `--idle-days 3` sets when a wait counts as stale.
@@ -32,19 +32,21 @@ Exit `0` means the scan is sound. Exit `1` means the scan itself failed or was t
 |---|---|
 | `code_review` | Waiting at a merge-review gate, **and the MR is verified open**. The run is done and the MR is there to read. Expected, not broken. |
 | `needs_human` | Escalated, failed, cancelled, or parked at a non-merge gate (`blocked_gate`). The run stopped because it could not continue. Also holds a merge-review stage whose MR was closed unmerged, or which has no MR at all. |
-| `idle` | Nothing is waiting on a human and nothing is moving: `never_picked_up`, `finished_not_closed`, `stalled_running`, `mr_merged_ticket_open`. |
+| `idle` | Nothing is waiting on a human and nothing is moving: `never_picked_up`, `finished_not_closed`, `stalled_running`, `mr_merged_ticket_open`, `gate_without_plan`. |
 | `healthy` | Running normally. Never report these, only count them. |
 
 `age_days` is time since Stokowski last did anything (`waiting_since`), not ticket age — that is what makes a wait visible. `stale` is the same number against `--idle-days`. `kind` is the precise classification; `stage` is where the run stopped.
 
 Each row also carries `mrs` and `mr_check`. `mr_check` is `found`, `none`, `unknown`, `no_repo_mapping`, `not_applicable` (audit stages never open MRs), or `disabled`. **`none` means nothing was ever pushed**: no branch in the ticket's repo carries the key and the run recorded no MR artifact. That single fact is usually the answer to "is it really stuck?" — the work is not sitting in review, it does not exist.
 
+Rows at an audit or plan gate also carry `plan_check` and `plan_comment_at`. `plan_check` is `posted`, `missing`, `unknown`, or `not_applicable`. **`posted` means the plan comment exists on the ticket, newer than the gate that is open** — so there is something to read and approve. `missing` means the gate opened but the plan never arrived, and the row moves to `idle` as `gate_without_plan` rather than sitting in `needs_human` asking for an approval nobody can give.
+
 Translate `stage` into plain words in the report rather than pasting the raw value:
 
 | `stage` | In plain words |
 |---|---|
 | `*-merge-review` | MR is open, waiting on review (only when `mr_check` is `found`) |
-| `coverage-audit-review`, `plan-review` | a plan is drafted, waiting on your approval |
+| `coverage-audit-review`, `plan-review` | a plan is drafted and on the ticket, waiting on your approval (only when `plan_check` is `posted`) |
 | `coverage-execute-escalated` | an item escalated mid-loop and the loop stopped |
 | `coverage-execute-review` | per-item review; only a problem once it escalates |
 
@@ -99,7 +101,7 @@ General rules:
 - **Never call a `merge_review` item stuck.** It is the handoff working. Give the link and move on.
 - **State the MR evidence when a run claims lost work.** If `mr_check` is `none`, write it plainly — "no MR exists; the branch was never pushed" — because that is what separates lost work from work that is waiting on a reviewer. If `mr_check` is `unknown` or `no_repo_mapping`, say the MR state is unverified rather than implying there is none.
 - **Collapse `never_picked_up` to one line** with the keys and their ticket age (`ticket_age_days`, measured from creation) — a dozen rows of backlog drowns the two rows that matter. Say whether they carry `stokowski_label`, because it splits the fix in two: missing label, or a label that landed without a pickup.
-- **Other `idle` kinds get one line each**, not a table: `mr_merged_ticket_open` (work landed, ticket still open — close it), `stalled_running` (quiet past `--stall-hours` with nothing waiting on you), `finished_not_closed` (the run completed but nobody opened the MR or closed the ticket). They are interesting only when the user can act, so name the action in the same line.
+- **Other `idle` kinds get one line each**, not a table: `mr_merged_ticket_open` (work landed, ticket still open — close it), `gate_without_plan` (gate open, plan not on the ticket yet — nothing to approve), `stalled_running` (quiet past `--stall-hours` with nothing waiting on you), `finished_not_closed` (the run completed but nobody opened the MR or closed the ticket). They are interesting only when the user can act, so name the action in the same line.
 - **Flag `stale` rows with ⚠** and mention how long in the heading when every row is stale.
 - **Omit empty sections.** If every bucket is empty, the whole report is one line: `Nothing stuck in the testing uplift (<n> tickets).`
 - **Report `warnings` verbatim-ish** when non-empty: they name rows whose MR state could not be checked, which the reader must not mistake for "no MR".
@@ -114,6 +116,7 @@ Fallback phrasing for the `Your options` cell when the run's own summary is thin
 | `mr_merged_ticket_open` | The MR merged but the ticket is still open. Verify the work is on master, then close the ticket (and any child items) rather than re-dispatching. |
 | `mr_closed_unmerged` | The MR was closed without merging, so the work never landed. Re-dispatch, or close the ticket if the work is obsolete. |
 | `merge_review_without_mr` | The run believes it handed off a merge review, but no branch or MR exists. Treat as lost work: re-dispatch or recover the branch. |
+| `gate_without_plan` | The audit gate is open but the plan comment never reached the ticket. Nothing to approve yet: wait for the comment, or open the dashboard if it stays missing. |
 | `blocked_gate` | Answer the gate: add `approved` or leave a comment plus `needs-rework` (or `@stokowski approved` / `@stokowski needs-rework: <what to change>`). |
 | `escalated` | Decide the item. If there is nothing to approve, re-dispatch with corrected input. |
 | `failed` | Nothing is running. Re-dispatch; check the dashboard for the cause first. |
@@ -128,6 +131,7 @@ Fallback phrasing for the `Your options` cell when the run's own summary is thin
 - **An MR that mentions a ticket key is not that ticket's MR.** On 2026-10-30 a prompt-fix MR in `stokowski-configs` mentioned ERICRULEZ-347 in its description while that ticket's coverage run was still blocked; GitLab's search returns it for the key and it was merged. The script therefore links only through a run's `merge_request` artifact or a branch whose name contains the key — a structural link, never a text match. Don't "improve" it back to a search.
 - **A `merge-review` stage does not prove an MR is open.** The stage string is the run's own claim. ERICRULEZ-228's MR was closed unmerged on 2026-10-10 and the stage still said merge review. That is why every merge-review row is now verified against GitLab before it is called the good stuck.
 - **A running item's clock starts at the newest event, not the last finished turn.** `latest_result.completed_at` only moves when a turn completes, so a rework that started minutes ago inherits the old turn's timestamp. On 2026-11-02 three fresh reworks were reported 62.9 hours quiet — abandoned — while they were actively running. The script asks the event log before calling a live turn dead.
+- **An open gate does not mean the comment is on the ticket.** The engine opens the gate and the stage's Jira comment lands separately, lagging by minutes and on 2026-11-02 by up to 2.5 hours: ERICRULEZ-318's gate opened 13:12:57Z and its plan comment arrived 14:06:16Z, while ERICRULEZ-327/328 had no plan comment at all. Reporting those as "plan awaiting approval" told the reader to approve a plan that did not exist. The script now looks for the plan comment (`Next Action Needed`, `Ticket Plan`, or `the plan below`) newer than the gate before counting the row as a review.
 - **Jira search can omit tickets the issue API still returns.** ERICRULEZ-228/229/230 were all missing from `labels in (...)` JQL while `workitem get` read them fine. That is why the script resolves every ticket through `twg jira workitem get` (issue API) and uses JQL only to discover labeled tickets with no work item. Do not "simplify" this back to a single JQL.
 - **`stok list --all-projects` silently truncates at `--limit`**, dropping whole projects (500 rows returned 12 of 92 ericrulez items). One `stok list -p <project>` per board is the only complete read.
 - **`--all` is not optional.** A work item can be closed while its ticket is still open; without `--all` that case vanishes instead of showing up as `closed_without_success`.

@@ -28,7 +28,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -75,6 +75,25 @@ REPO_PATHS = {
 # drafts a ticket plan. Skipping the MR lookup for them keeps the scan fast and
 # avoids claiming "no MR" about work that was never supposed to have one.
 NO_MR_STAGE_MARKERS = ("coverage-audit", "plan-review")
+
+# Stages where the human cannot act until a plan is published as a Jira
+# comment. The gate opens first and the comment lands later -- usually minutes,
+# observed up to 2.5 hours -- so a gate alone does not mean there is anything to
+# approve.
+PLAN_STAGE_MARKERS = ("coverage-audit-review", "plan-review")
+
+# Strings that only the plan comment carries, matched case-insensitively.
+# Deliberately heading-level, not the bare phrase "ticket plan": the analysis
+# comment says "explored separately from the ticket plan", which matched a loose
+# marker and reported ERICRULEZ-327 as having a plan it never received.
+# Both prompt generations are covered -- "Next Action Needed" and "the plan
+# below and ..." (Nov 2026), "Coverage Backlog Ticket Plan" (Oct 2026).
+PLAN_MARKERS = ("next action needed", "coverage backlog ticket plan", "the plan below and")
+
+# Jira comment delivery trails the gate by tens of minutes, so a comment may
+# legitimately sit a little before the gate timestamp inside one turn. Anything
+# older than this belonged to a previous round and must not satisfy a new gate.
+PLAN_GRACE = timedelta(minutes=2)
 
 # A gate waiting at this stage is the merge review: Stokowski is finished and
 # only a human code review stands between the branch and master. That is the
@@ -430,6 +449,90 @@ def mr_check_applies(stage: str) -> bool:
     return not any(marker in stage for marker in NO_MR_STAGE_MARKERS)
 
 
+def flatten_adf(body: Any) -> str:
+    """Flatten an Atlassian document body to plain text."""
+    if isinstance(body, str):
+        return body
+    chunks: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "text":
+                chunks.append(node.get("text") or "")
+            for child in node.get("content") or []:
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(body)
+    return "\n".join(chunks)
+
+
+def fetch_jira_comments(key: str) -> list[dict[str, Any]]:
+    raw = parse_json(
+        sh(
+            [
+                "twg",
+                "-o",
+                "json",
+                "--output-summary",
+                "none",
+                "jira",
+                "workitem",
+                "comment",
+                "query",
+                "--issue-id",
+                key,
+                "--first",
+                "100",
+            ]
+        ),
+        f"jira comment query {key}",
+    )
+    data = raw.get("data")
+    if isinstance(data, dict):
+        data = data.get("comments") or data.get("items") or []
+    comments = []
+    for entry in data or []:
+        node = entry.get("node", entry)
+        author = node.get("author")
+        comments.append(
+            {
+                "created": node.get("created"),
+                "author": author.get("displayName") if isinstance(author, dict) else None,
+                "text": flatten_adf(node.get("body")),
+            }
+        )
+    return comments
+
+
+def plan_status(
+    comments: list[dict[str, Any]], gate_opened_at: datetime | None
+) -> tuple[str, datetime | None]:
+    """Did this gate's plan comment reach Jira?
+
+    Returns (status, newest_plan_comment_at) where status is `posted`,
+    `missing`, or `unknown` (the thread could not be read).
+    """
+    newest: datetime | None = None
+    for comment in comments:
+        created = parse_ts(comment.get("created"))
+        if not created:
+            continue
+        lowered = (comment.get("text") or "").lower()
+        if not any(marker in lowered for marker in PLAN_MARKERS):
+            continue
+        if newest is None or created > newest:
+            newest = created
+    if newest is None:
+        return "missing", None
+    if gate_opened_at and newest < gate_opened_at - PLAN_GRACE:
+        # A plan from an earlier round says nothing about this gate.
+        return "missing", newest
+    return "posted", newest
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Find testing-uplift work waiting on a human.")
     parser.add_argument(
@@ -685,6 +788,28 @@ def main() -> int:
                 mr_check=mr_check,
             )
             buckets["needs_human"].append(record)
+            record["plan_check"] = "not_applicable"
+            if any(marker in stage for marker in PLAN_STAGE_MARKERS):
+                gate_opened_at = None
+                for event in record.get("events") or []:
+                    if event.get("type") == "gate.waiting":
+                        gate_opened_at = parse_ts(event.get("at")) or gate_opened_at
+                try:
+                    p_status, p_at = plan_status(
+                        fetch_jira_comments(ticket["key"]), gate_opened_at
+                    )
+                except (CommandError, OSError):
+                    p_status, p_at = "unknown", None
+                record["plan_check"] = p_status
+                record["plan_comment_at"] = p_at.isoformat() if p_at else None
+                if p_status == "missing":
+                    # The gate is open but the plan never reached the ticket.
+                    # Telling the reader to approve here sends them looking for
+                    # something that does not exist yet.
+                    record["kind"] = "gate_without_plan"
+                    buckets["needs_human"].pop()
+                    buckets["idle"].append(record)
+                    continue
             continue
 
         if state == "completed":
@@ -736,6 +861,8 @@ def main() -> int:
                     f"{record['ticket']}: no repo: label mapped to a GitLab project; "
                     "merge-request state not checked"
                 )
+            if record.get("plan_check") == "unknown":
+                warnings.append(f"{record['ticket']}: Jira comment thread unreadable; plan not verified")
 
     report = {
         "generated_at": now.isoformat(),
