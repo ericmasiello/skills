@@ -28,8 +28,9 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import quote
 
 # Scope: the `workflow:*` labels `stokowski-implement` applies for the testing
 # uplift, plus the workflow ids those labels map to. The ids also catch a work
@@ -57,6 +58,42 @@ STOK_PROJECTS = {
 DASHBOARD = "https://stokowski-dashboard.prod.cobalt.vpsvc.com/task/native/{project}/{item}"
 
 MR_URL_RE = re.compile(r"https://gitlab\.com/[^\s\)\]\"'<>]+/-/merge_requests/\d+")
+
+# Jira `repo:<name>` label -> GitLab project path, so a ticket's MRs can be
+# found from the branch Stokowski pushes. Branch names are normalized by the
+# dispatcher (`utils-browser` becomes `utilsbrowser`), so the reliable search is
+# "branch name contains the ticket key", never a guessed branch name.
+REPO_PATHS = {
+    "studio": "vistaprint-org/design-technology/studio/studio",
+    "stokowski-configs": (
+        "vistaprint-org/vista-engineering/engineering-productivity/ci-cd/"
+        "remote-agents/stokowski-configs"
+    ),
+}
+
+# Stages that never produce a merge request: the audit only reads code and
+# drafts a ticket plan. Skipping the MR lookup for them keeps the scan fast and
+# avoids claiming "no MR" about work that was never supposed to have one.
+NO_MR_STAGE_MARKERS = ("coverage-audit", "plan-review")
+
+# Stages where the human cannot act until a plan is published as a Jira
+# comment. The gate opens first and the comment lands later -- usually minutes,
+# observed up to 2.5 hours -- so a gate alone does not mean there is anything to
+# approve.
+PLAN_STAGE_MARKERS = ("coverage-audit-review", "plan-review")
+
+# Strings that only the plan comment carries, matched case-insensitively.
+# Deliberately heading-level, not the bare phrase "ticket plan": the analysis
+# comment says "explored separately from the ticket plan", which matched a loose
+# marker and reported ERICRULEZ-327 as having a plan it never received.
+# Both prompt generations are covered -- "Next Action Needed" and "the plan
+# below and ..." (Nov 2026), "Coverage Backlog Ticket Plan" (Oct 2026).
+PLAN_MARKERS = ("next action needed", "coverage backlog ticket plan", "the plan below and")
+
+# Jira comment delivery trails the gate by tens of minutes, so a comment may
+# legitimately sit a little before the gate timestamp inside one turn. Anything
+# older than this belonged to a previous round and must not satisfy a new gate.
+PLAN_GRACE = timedelta(minutes=2)
 
 # A gate waiting at this stage is the merge review: Stokowski is finished and
 # only a human code review stands between the branch and master. That is the
@@ -300,6 +337,202 @@ def resolve_mr_url(
     return None, None
 
 
+def gitlab_json(path: str) -> Any:
+    """GET a GitLab API path. Tolerates banner lines before the JSON body."""
+    out = sh(["glab", "api", path])
+    starts = [index for index in (out.find("["), out.find("{")) if index >= 0]
+    if not starts:
+        raise CommandError(f"glab api {path} returned no JSON: {out.strip()[:200]}")
+    return parse_json(out[min(starts) :], f"glab api {path}")
+
+
+def mr_record(mr: dict[str, Any], source: str) -> dict[str, Any]:
+    return {
+        "iid": mr.get("iid"),
+        "state": mr.get("state"),
+        "merged_at": mr.get("merged_at"),
+        "closed_at": mr.get("closed_at"),
+        "url": mr.get("web_url"),
+        "source_branch": mr.get("source_branch"),
+        "title": mr.get("title"),
+        "source": source,
+    }
+
+
+def find_ticket_mrs(
+    ticket: dict[str, Any], item: dict[str, Any] | None
+) -> tuple[list[dict[str, Any]], str]:
+    """Resolve the merge requests that actually carry this ticket's work.
+
+    Returns (mrs, check) where check is `found`, `none`, `unknown`,
+    `not_applicable`, `no_repo_mapping`, or `disabled`.
+
+    Only two sources count as a link, and both are structural:
+    - a `merge_request` artifact the run recorded (project id + iid), and
+    - a branch in the ticket's repo whose name contains the ticket key.
+
+    A free-text mention of the key in some other MR is NOT a match. On
+    2026-10-30 a prompt-fix MR in `stokowski-configs` mentioned ERICRULEZ-347
+    while that ticket's coverage run was still blocked; treating mention as
+    link would have reported five lost commits as merged.
+    """
+    key = ticket["key"]
+    found: dict[tuple[Any, Any], dict[str, Any]] = {}
+    queried = False
+    failed = False
+
+    for artifact in (item or {}).get("artifacts") or []:
+        if artifact.get("entity_type") != "merge_request":
+            continue
+        iid = artifact.get("entity_id")
+        project_id = artifact.get("external_project_id")
+        if not iid or not project_id:
+            continue
+        try:
+            mr = gitlab_json(f"projects/{project_id}/merge_requests/{iid}")
+            queried = True
+        except (CommandError, OSError):
+            failed = True
+            continue
+        # `entity_id` arrives as a string while the API returns an integer iid,
+        # so normalize before keying or the same MR is recorded twice.
+        found[(str(mr.get("iid")), mr.get("source_branch"))] = mr_record(mr, "artifact")
+
+    paths = []
+    for label in ticket.get("labels") or []:
+        if label.startswith("repo:"):
+            path = REPO_PATHS.get(label[len("repo:") :])
+            if path:
+                paths.append(path)
+
+    for path in paths:
+        encoded = quote(path, safe="")
+        try:
+            branches = gitlab_json(
+                f"projects/{encoded}/repository/branches"
+                f"?search={quote(key)}&per_page=20"
+            )
+            queried = True
+        except (CommandError, OSError):
+            failed = True
+            continue
+        for branch in branches or []:
+            name = branch.get("name") or ""
+            if key not in name:
+                continue
+            try:
+                mrs = gitlab_json(
+                    f"projects/{encoded}/merge_requests"
+                    f"?source_branch={quote(name, safe='')}&per_page=5"
+                )
+            except (CommandError, OSError):
+                failed = True
+                continue
+            for mr in mrs or []:
+                # The same MR arrives once from the run's artifact (keyed by
+                # numeric project id) and once from the branch search (keyed by
+                # project path), so identity here must not be the project key.
+                found[(str(mr.get("iid")), mr.get("source_branch"))] = mr_record(mr, "branch")
+
+    if found:
+        return list(found.values()), "found"
+    if not paths:
+        return [], "no_repo_mapping"
+    # `none` is a claim that nothing was pushed. A failed lookup cannot support
+    # it, so any failure degrades the answer to `unknown`.
+    if failed or not queried:
+        return [], "unknown"
+    return [], "none"
+
+
+def mr_check_applies(stage: str) -> bool:
+    return not any(marker in stage for marker in NO_MR_STAGE_MARKERS)
+
+
+def flatten_adf(body: Any) -> str:
+    """Flatten an Atlassian document body to plain text."""
+    if isinstance(body, str):
+        return body
+    chunks: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "text":
+                chunks.append(node.get("text") or "")
+            for child in node.get("content") or []:
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(body)
+    return "\n".join(chunks)
+
+
+def fetch_jira_comments(key: str) -> list[dict[str, Any]]:
+    raw = parse_json(
+        sh(
+            [
+                "twg",
+                "-o",
+                "json",
+                "--output-summary",
+                "none",
+                "jira",
+                "workitem",
+                "comment",
+                "query",
+                "--issue-id",
+                key,
+                "--first",
+                "100",
+            ]
+        ),
+        f"jira comment query {key}",
+    )
+    data = raw.get("data")
+    if isinstance(data, dict):
+        data = data.get("comments") or data.get("items") or []
+    comments = []
+    for entry in data or []:
+        node = entry.get("node", entry)
+        author = node.get("author")
+        comments.append(
+            {
+                "created": node.get("created"),
+                "author": author.get("displayName") if isinstance(author, dict) else None,
+                "text": flatten_adf(node.get("body")),
+            }
+        )
+    return comments
+
+
+def plan_status(
+    comments: list[dict[str, Any]], gate_opened_at: datetime | None
+) -> tuple[str, datetime | None]:
+    """Did this gate's plan comment reach Jira?
+
+    Returns (status, newest_plan_comment_at) where status is `posted`,
+    `missing`, or `unknown` (the thread could not be read).
+    """
+    newest: datetime | None = None
+    for comment in comments:
+        created = parse_ts(comment.get("created"))
+        if not created:
+            continue
+        lowered = (comment.get("text") or "").lower()
+        if not any(marker in lowered for marker in PLAN_MARKERS):
+            continue
+        if newest is None or created > newest:
+            newest = created
+    if newest is None:
+        return "missing", None
+    if gate_opened_at and newest < gate_opened_at - PLAN_GRACE:
+        # A plan from an earlier round says nothing about this gate.
+        return "missing", newest
+    return "posted", newest
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Find testing-uplift work waiting on a human.")
     parser.add_argument(
@@ -319,6 +552,12 @@ def main() -> int:
         type=float,
         default=6.0,
         help="quiet hours before a running item counts as stalled (default 6)",
+    )
+    parser.add_argument(
+        "--no-mr-check",
+        action="store_true",
+        help="skip GitLab verification of merge-request state (faster, but a "
+        "merge-review row can then be a merged or closed MR)",
     )
     args = parser.parse_args()
 
@@ -398,7 +637,16 @@ def main() -> int:
                 data = raw["data"]
                 work_item = data.get("workItem") or {}
                 events = []
+                last_event_at = None
                 for event in data.get("events") or []:
+                    # Any event is evidence the run did something, including the
+                    # `turn.started` that a rework emits. Ageing a running item
+                    # from its last *completed* turn makes a fresh rework look
+                    # abandoned: on 2026-11-02 three reworks started within the
+                    # minute were reported 62.9h quiet.
+                    occurred = parse_ts(event.get("occurred_at"))
+                    if occurred and (last_event_at is None or occurred > last_event_at):
+                        last_event_at = occurred
                     payload = event.get("payload") or {}
                     if event.get("type") not in REPORTABLE_EVENTS:
                         continue
@@ -412,6 +660,7 @@ def main() -> int:
                     )
                 detail_cache[cache_key] = {
                     "events": events,
+                    "last_event_at": last_event_at,
                     "required_action": work_item.get("required_action"),
                     "summary": (work_item.get("latest_result") or {}).get("summary") or "",
                 }
@@ -426,6 +675,20 @@ def main() -> int:
         "idle": [],
         "healthy": [],
     }
+
+    mr_cache: dict[str, tuple[list[dict[str, Any]], str]] = {}
+
+    def mrs_for(
+        ticket: dict[str, Any], item: dict[str, Any], stage: str
+    ) -> tuple[list[dict[str, Any]], str]:
+        if args.no_mr_check:
+            return [], "disabled"
+        if not mr_check_applies(stage):
+            return [], "not_applicable"
+        key = ticket["key"]
+        if key not in mr_cache:
+            mr_cache[key] = find_ticket_mrs(ticket, item)
+        return mr_cache[key]
 
     for key in candidates:
         ticket = tickets.get(key)
@@ -479,7 +742,33 @@ def main() -> int:
 
         if state == "awaiting_review" and stage.endswith(MERGE_REVIEW_STAGE):
             url, bare = resolve_mr_url(item, [result.get("summary") or ""])
-            record.update(kind="merge_review", mr_url=url, mr_ref=bare)
+            mrs, mr_check = mrs_for(ticket, item, stage)
+            open_mrs = [mr for mr in mrs if mr.get("state") == "opened"]
+            record.update(
+                kind="merge_review",
+                mr_url=url or (open_mrs[0]["url"] if open_mrs else None),
+                mr_ref=bare,
+                mrs=mrs,
+                mr_check=mr_check,
+            )
+            # The stage string says "handoff to a reviewer". Only the MR itself
+            # can confirm one is waiting. Verified not-open means the reviewer
+            # handoff is over: either the work landed and the ticket is stale,
+            # or the MR was closed and nothing reviewable survives.
+            if mr_check == "found" and not open_mrs:
+                merged = any(mr.get("state") in {"merged", "locked"} for mr in mrs)
+                record["kind"] = (
+                    "mr_merged_ticket_open" if merged else "mr_closed_unmerged"
+                )
+                record["mr_state"] = "merged" if merged else "closed"
+                buckets["idle" if merged else "needs_human"].append(record)
+                continue
+            if mr_check == "none":
+                # A merge-review gate with no MR at all: the branch was never
+                # pushed, so there is nothing for a reviewer to open.
+                record["kind"] = "merge_review_without_mr"
+                buckets["needs_human"].append(record)
+                continue
             buckets["code_review"].append(record)
             continue
 
@@ -487,6 +776,7 @@ def main() -> int:
             detail = detail_for(item["_project"], item["id"])
             gate = detail.get("required_action") or item.get("required_action") or {}
             primary = detail.get("summary") or result.get("summary") or ""
+            mrs, mr_check = mrs_for(ticket, item, stage)
             record.update(
                 kind=state if state != "awaiting_review" else "blocked_gate",
                 choices=gate.get("choices"),
@@ -494,8 +784,32 @@ def main() -> int:
                 reason_tail=primary.strip()[-700:],
                 events=detail.get("events", []),
                 mr_url=resolve_mr_url(item, [primary, result.get("summary") or ""])[0],
+                mrs=mrs,
+                mr_check=mr_check,
             )
             buckets["needs_human"].append(record)
+            record["plan_check"] = "not_applicable"
+            if any(marker in stage for marker in PLAN_STAGE_MARKERS):
+                gate_opened_at = None
+                for event in record.get("events") or []:
+                    if event.get("type") == "gate.waiting":
+                        gate_opened_at = parse_ts(event.get("at")) or gate_opened_at
+                try:
+                    p_status, p_at = plan_status(
+                        fetch_jira_comments(ticket["key"]), gate_opened_at
+                    )
+                except (CommandError, OSError):
+                    p_status, p_at = "unknown", None
+                record["plan_check"] = p_status
+                record["plan_comment_at"] = p_at.isoformat() if p_at else None
+                if p_status == "missing":
+                    # The gate is open but the plan never reached the ticket.
+                    # Telling the reader to approve here sends them looking for
+                    # something that does not exist yet.
+                    record["kind"] = "gate_without_plan"
+                    buckets["needs_human"].pop()
+                    buckets["idle"].append(record)
+                    continue
             continue
 
         if state == "completed":
@@ -510,15 +824,45 @@ def main() -> int:
 
         quiet_hours = (now - since).total_seconds() / 3600 if since else None
         if quiet_hours is not None and quiet_hours >= args.stall_hours:
-            record.update(kind="stalled_running", quiet_hours=round(quiet_hours, 1))
-            buckets["idle"].append(record)
-            continue
+            # `since` comes from the work item row, which only knows about
+            # finished turns. Ask the event log before calling a live turn dead.
+            detail = detail_for(item["_project"], item["id"])
+            last_event = detail.get("last_event_at")
+            if last_event and since and last_event > since:
+                since = last_event
+                quiet_hours = (now - since).total_seconds() / 3600
+                age_days = days_between(now, since)
+                record.update(
+                    waiting_since=since.isoformat(),
+                    age_days=age_days,
+                    stale=age_days is not None and age_days >= args.idle_days,
+                )
+            if quiet_hours >= args.stall_hours:
+                record.update(kind="stalled_running", quiet_hours=round(quiet_hours, 1))
+                buckets["idle"].append(record)
+                continue
 
         record["kind"] = "running"
         buckets["healthy"].append(record)
 
     for records in buckets.values():
         records.sort(key=lambda r: (-(r.get("age_days") or r.get("ticket_age_days") or 0), r["ticket"]))
+
+    # A row whose MR state could not be verified must not read like a verified
+    # one. These are gaps in the check, not failures of the scan.
+    warnings: list[str] = []
+    for name in ("code_review", "needs_human", "idle"):
+        for record in buckets[name]:
+            check = record.get("mr_check")
+            if check == "unknown":
+                warnings.append(f"{record['ticket']}: merge-request state unreadable (glab)")
+            elif check == "no_repo_mapping":
+                warnings.append(
+                    f"{record['ticket']}: no repo: label mapped to a GitLab project; "
+                    "merge-request state not checked"
+                )
+            if record.get("plan_check") == "unknown":
+                warnings.append(f"{record['ticket']}: Jira comment thread unreadable; plan not verified")
 
     report = {
         "generated_at": now.isoformat(),
@@ -529,6 +873,7 @@ def main() -> int:
             "tickets": len(tickets),
             "work_items_listed": sum(len(v) for v in items_by_project.values()),
             "work_items_in_scope": len(latest_by_ticket),
+            "mr_check_enabled": not args.no_mr_check,
             "truncated": truncated,
         },
         "thresholds": {"idle_days": args.idle_days, "stall_hours": args.stall_hours},
@@ -537,6 +882,7 @@ def main() -> int:
         "needs_human": buckets["needs_human"],
         "idle": buckets["idle"],
         "healthy": buckets["healthy"],
+        "warnings": warnings,
         "errors": errors,
     }
     print(json.dumps(report, indent=2))
