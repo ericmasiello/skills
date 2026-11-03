@@ -71,11 +71,16 @@ Translate `stage` into plain words in the report rather than pasting the raw val
 
 ## Report
 
-Lead with one line: how many tickets were scanned, how many runs were re-dispatched, how many MRs are ready to merge, and how many items need a decision. Then emit only the sections that have rows, in this order: re-dispatched, ready to merge, MRs with feedback, drafts, needs a decision or fix, idle one-liners. The user is scanning for work, so every row answers *which ticket*, *what is true right now*, and *what they can do about it*.
+Lead with one line: how many tickets were scanned, how many runs were re-dispatched, how many MRs are ready to merge, and how many items need a decision. Then emit only the sections that have rows, in this order: re-dispatched, ready to merge, MRs with feedback, drafts, waiting on a reviewer, needs a decision or fix, idle. Every section is a table with one ticket per row, using the columns shown below; never fold several tickets into one row or a section into a sentence. The user is scanning for work, so every row answers *which ticket*, *what is true right now*, and *what they can do about it*.
 
 ### Re-dispatched
 
-One line per `redispatched` row: ticket link, the stage it failed at, the `cause` in plain words, and that a fresh run started. Nothing for the user to do.
+```markdown
+## Re-dispatched
+| Ticket | Failed at | Cause | Now |
+|---|---|---|---|
+| [ERICRULEZ-367](url) … | implement | stale context after an MR rework | fresh run started · [dashboard](url) |
+```
 
 ### Open MRs
 
@@ -96,12 +101,18 @@ The MR triage replaces the old code-review list: `code_review` rows all appear h
 ## Drafts
 | Ticket | MR | Pipeline | Rebase | Feedback |
 |---|---|---|---|---|
+| [ERICRULEZ-369](url) … | [!13892](url) | ❌ failed | not needed | 2 AI suggestions: restore test never checks the tracking event; `clearAllMocks` reason doesn't hold |
+
+## Waiting on a reviewer
+| Ticket | MR | Pipeline | Approvals |
+|---|---|---|---|
+| [ERICRULEZ-346](url) … | [!13849](url) | ✅ | 1 of 2 (aarbi) |
 ```
 
 - Name the feedback, not its count: the AI finding titles and each thread's excerpt with its link, so the user can act without opening the MR. Collapse to "N more" past three per row.
 - Say whether a must-fix or a failed pipeline is the blocker; those come before suggestions in the cell.
 - A `ready_to_merge` row may still carry suggestions. Show them as notes: GitLab already permits the merge, so they are the user's call, not a blocker.
-- Write `awaiting_review` MRs as one line listing the MR links; they are waiting on a reviewer, not on the user.
+- `awaiting_review` MRs wait on a reviewer, not on the user; the table says so by having no action column.
 
 ### Needs a decision or fix
 
@@ -138,8 +149,7 @@ General rules:
 - **Say when two rows look like the same work.** Identical summaries usually mean a re-run superseded the other; naming that saves the user from answering the same gate twice.
 - **Never call a `merge_review` item stuck.** It is the handoff working. Give the link and move on.
 - **State the MR evidence when a run claims lost work.** If `mr_check` is `none`, write it plainly — "no MR exists; the branch was never pushed" — because that is what separates lost work from work that is waiting on a reviewer. If `mr_check` is `unknown` or `no_repo_mapping`, say the MR state is unverified rather than implying there is none.
-- **Collapse `never_picked_up` to one line** with the keys and their ticket age (`ticket_age_days`, measured from creation) — a dozen rows of backlog drowns the two rows that matter. Say whether they carry `stokowski_label`, because it splits the fix in two: missing label, or a label that landed without a pickup.
-- **Other `idle` kinds get one line each**, not a table: `mr_merged_ticket_open` (work landed, ticket still open — close it), `gate_without_plan` (gate open, plan not on the ticket yet — nothing to approve), `stalled_running` (quiet past `--stall-hours` with nothing waiting on you), `finished_not_closed` (the run completed but nobody opened the MR or closed the ticket). They are interesting only when the user can act, so name the action in the same line.
+- **`idle` rows go in their own table**, after needs a decision or fix: `| Ticket | State | Age | Your options |`. The state in plain words: `mr_merged_ticket_open` (work landed, ticket still open — close it), `gate_without_plan` (gate open, plan not on the ticket yet — nothing to approve), `stalled_running` (quiet past `--stall-hours` with nothing waiting on you), `finished_not_closed` (the run completed but nobody opened the MR or closed the ticket), `never_picked_up` (age is `ticket_age_days`, from creation; say whether it carries `stokowski_label`, because that splits the fix in two: missing label, or a label that landed without a pickup).
 - **Flag `stale` rows with ⚠** and mention how long in the heading when every row is stale.
 - **Omit empty sections.** If every bucket is empty, the whole report is one line: `Nothing stuck in the testing uplift (<n> tickets).`
 - **Report `warnings` verbatim-ish** when non-empty: they name rows whose MR state could not be checked, which the reader must not mistake for "no MR".
