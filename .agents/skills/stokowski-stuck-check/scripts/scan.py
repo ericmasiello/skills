@@ -10,8 +10,11 @@ writes the prose report from this JSON; it never re-derives the join by hand.
 
 Usage:
   python3 scan.py [--idle-days 3] [--stall-hours 6] [--board ERICRULEZ]
+                  [--redispatch-failed] [--max-redispatches 2]
 
-Read-only: no Jira writes, no Stokowski writes.
+Read-only by default. The one write is opt-in: `--redispatch-failed` starts a
+fresh run of the same workflow on each work item whose run failed, which is
+what the dashboard's re-dispatch does. No Jira or GitLab writes, ever.
 
 Why the join is work-item-first: a work item carries `origin.reference
 .display_key` back to its Jira ticket, so `stok list` alone names every ticket
@@ -126,6 +129,25 @@ REPORTABLE_EVENTS = (
     "run.cancelled",
     "gate.waiting",
 )
+
+
+# The AI reviewer posts one summary note per review, tagged with this marker.
+# Its verdict heading is either "✅ AI Review: Approved" or "⚠️ AI Review:
+# Changes Requested"; findings sit under "🚨 Must Fix" and "💡 Suggestions".
+AI_REVIEW_MARKER = "<!-- ai-code-review -->"
+
+# GitLab `detailed_merge_status` values that mean the branch must be rebased
+# or have conflicts resolved before anything else can happen.
+REBASE_STATUSES = {"need_rebase", "conflict"}
+
+PIPELINE_BAD = {"failed", "canceled"}
+
+# Automation that comments on MRs. Its notes are not reviewer feedback.
+BOT_AUTHOR_PREFIXES = ("project_", "sa-", "group_")
+
+# Mentioning the Stokowski GitLab bot on an MR opens a conversation that, when
+# the comment asks for changes, sends the merge review back for rework.
+REWORK_MENTION = "@stokowski-native"
 
 
 class CommandError(RuntimeError):
@@ -347,9 +369,12 @@ def gitlab_json(path: str) -> Any:
 
 
 def mr_record(mr: dict[str, Any], source: str) -> dict[str, Any]:
+    web_url = mr.get("web_url") or ""
     return {
         "iid": mr.get("iid"),
+        "project_path": web_url.split("gitlab.com/", 1)[-1].split("/-/", 1)[0] or None,
         "state": mr.get("state"),
+        "draft": bool(mr.get("draft") or mr.get("work_in_progress")),
         "merged_at": mr.get("merged_at"),
         "closed_at": mr.get("closed_at"),
         "url": mr.get("web_url"),
@@ -533,6 +558,280 @@ def plan_status(
     return "posted", newest
 
 
+def is_bot(username: str | None) -> bool:
+    name = (username or "").lower()
+    return name.startswith(BOT_AUTHOR_PREFIXES) or "bot" in name
+
+
+def first_line(text: str, limit: int = 160) -> str:
+    for line in (text or "").splitlines():
+        stripped = line.strip().strip("*").strip()
+        if stripped and not stripped.startswith("<!--"):
+            return stripped[:limit]
+    return ""
+
+
+def parse_ai_review(body: str) -> dict[str, Any]:
+    """Split an AI review note into its verdict and finding titles per section."""
+    verdict = "changes_requested" if "changes requested" in body.lower() else "approved"
+    findings: dict[str, list[str]] = {"must_fix": [], "suggestions": []}
+    # The sections verbatim, heading included, so a rework request can quote
+    # the reviewer's own file paths, snippets, and proposed fixes.
+    sections_md: dict[str, list[str]] = {"must_fix": [], "suggestions": []}
+    section = None
+    for line in body.splitlines():
+        if line.startswith("## "):
+            section = None
+            continue
+        if line.startswith("### "):
+            heading = line.lower()
+            section = (
+                "must_fix" if "must fix" in heading
+                else "suggestions" if "suggestion" in heading
+                else None
+            )
+            if section:
+                sections_md[section].append(line)
+            continue
+        if section:
+            sections_md[section].append(line)
+        # Each finding opens with a bold conventional-comment label, e.g.
+        # "**suggestion: Distribute click tests ...** `info`".
+        if section and line.startswith("**") and ":" in line[:40]:
+            findings[section].append(line.strip().strip("`").replace("**", "")[:160])
+    markdown = {
+        f"{name}_md": "\n".join(lines).strip().removesuffix("---").strip()
+        for name, lines in sections_md.items()
+    }
+    return {"verdict": verdict, **findings, **markdown}
+
+
+def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
+    """Read one open MR closely enough to say what the author has to do next.
+
+    Returns a record whose `category` is `draft`, `ready_to_merge`,
+    `has_feedback`, or `awaiting_review`, plus the evidence behind it.
+    """
+    encoded = quote(mr["project_path"], safe="")
+    base = f"projects/{encoded}/merge_requests/{mr['iid']}"
+    detail = gitlab_json(f"{base}?include_diverged_commits_count=true")
+    approvals = gitlab_json(f"{base}/approvals")
+    discussions = gitlab_json(f"{base}/discussions?per_page=100")
+    commits = gitlab_json(f"{base}/commits?per_page=1")
+
+    head_at = parse_ts((commits[0] if commits else {}).get("committed_date"))
+    pipeline = (detail.get("head_pipeline") or {}).get("status")
+    merge_status = detail.get("detailed_merge_status")
+    web_url = detail.get("web_url") or mr.get("url")
+
+    def newest(current: datetime | None, candidate: datetime | None) -> datetime | None:
+        if candidate is None:
+            return current
+        return candidate if current is None or candidate > current else current
+
+    ai_review: dict[str, Any] | None = None
+    unresolved: list[dict[str, Any]] = []
+    plain_comments: list[tuple[datetime | None, dict[str, Any]]] = []
+    rework_requested_at: datetime | None = None
+    stokowski_push_at: datetime | None = None
+    any_push_at: datetime | None = None
+    for discussion in discussions or []:
+        all_notes = discussion.get("notes") or []
+        for note in all_notes:
+            body_text = note.get("body") or ""
+            if not (note.get("system") and body_text.startswith("added ") and "commit" in body_text):
+                continue
+            pushed = parse_ts(note.get("created_at"))
+            any_push_at = newest(any_push_at, pushed)
+            # A push by the bot is Stokowski reworking on its own. A push under
+            # a human account alone addresses no feedback: it is often just a
+            # rebase.
+            if is_bot((note.get("author") or {}).get("username")):
+                stokowski_push_at = newest(stokowski_push_at, pushed)
+        notes = [note for note in all_notes if not note.get("system")]
+        if not notes:
+            continue
+        opener = notes[0]
+        body = opener.get("body") or ""
+        author = (opener.get("author") or {}).get("username")
+        created = parse_ts(opener.get("created_at"))
+        if AI_REVIEW_MARKER in body:
+            if ai_review is None or (created and created > ai_review["_at"]):
+                ai_review = {"_at": created, **parse_ai_review(body)}
+            continue
+        if author == me and REWORK_MENTION in body:
+            rework_requested_at = newest(rework_requested_at, created)
+            continue
+        if is_bot(author) or author == me:
+            continue
+        entry = {
+            "author": author,
+            "excerpt": first_line(body),
+            "body": body.strip()[:2000],
+            "url": f"{web_url}#note_{opener.get('id')}",
+        }
+        if opener.get("resolvable") and not opener.get("resolved"):
+            unresolved.append(entry)
+        else:
+            plain_comments.append((created, entry))
+
+    # Feedback counts as handed off once it was sent to Stokowski or Stokowski
+    # pushed after it. Commit dates cannot say this: on 2026-11-03 a batch
+    # rebase made every AI review look older than the head commit, which hid
+    # findings nobody had acted on.
+    handled_at = newest(rework_requested_at, stokowski_push_at)
+    new_comments = [
+        entry for created, entry in plain_comments
+        if handled_at is None or (created and created > handled_at)
+    ]
+
+    ai_out = None
+    if ai_review:
+        reviewed_at = ai_review.pop("_at")
+        stale = bool(handled_at and reviewed_at and handled_at > reviewed_at)
+        ai_out = {
+            **ai_review,
+            "reviewed_at": reviewed_at.isoformat() if reviewed_at else None,
+            "stale": stale,
+        }
+
+    failed_jobs: list[dict[str, Any]] = []
+    pipeline_id = (detail.get("head_pipeline") or {}).get("id")
+    if pipeline in PIPELINE_BAD and pipeline_id:
+        try:
+            jobs = gitlab_json(
+                f"projects/{encoded}/pipelines/{pipeline_id}/jobs?scope[]=failed&per_page=50"
+            )
+        except (CommandError, OSError):
+            jobs = []
+        failed_jobs = [
+            {"name": job.get("name"), "stage": job.get("stage"), "url": job.get("web_url")}
+            for job in jobs or []
+            if not job.get("allow_failure")
+        ]
+
+    # A rework request stays pending until anything is pushed after it; until
+    # then a second request would only queue a duplicate rework. Any account
+    # counts here: Stokowski's rework pushes on studio MRs are attributed to
+    # the MR's human assignee (!13915, !13906 on 2026-11-03).
+    rework_pending = bool(
+        rework_requested_at and (any_push_at is None or rework_requested_at > any_push_at)
+    )
+
+    feedback: list[str] = []
+    if pipeline in PIPELINE_BAD:
+        feedback.append(f"pipeline {pipeline}")
+    if merge_status in REBASE_STATUSES or detail.get("has_conflicts"):
+        feedback.append("needs rebase" if merge_status == "need_rebase" else "merge conflicts")
+    if ai_out and not ai_out["stale"]:
+        if ai_out["verdict"] == "changes_requested":
+            feedback.append("AI review requested changes")
+        if ai_out["must_fix"]:
+            feedback.append(f"{len(ai_out['must_fix'])} AI must-fix")
+        if ai_out["suggestions"]:
+            feedback.append(f"{len(ai_out['suggestions'])} AI suggestion(s)")
+    if unresolved:
+        feedback.append(f"{len(unresolved)} unresolved thread(s)")
+    if new_comments:
+        feedback.append(f"{len(new_comments)} reviewer comment(s) not yet sent to Stokowski")
+
+    approved = bool(approvals.get("approved"))
+    if detail.get("draft"):
+        category = "draft"
+    elif approved and merge_status == "mergeable":
+        category = "ready_to_merge"
+    elif feedback:
+        category = "has_feedback"
+    else:
+        category = "awaiting_review"
+
+    return {
+        "iid": mr["iid"],
+        "url": web_url,
+        "title": detail.get("title"),
+        "category": category,
+        "draft": bool(detail.get("draft")),
+        "pipeline": pipeline,
+        "merge_status": merge_status,
+        "behind_by": detail.get("diverged_commits_count"),
+        "approved": approved,
+        "approved_by": [
+            (entry.get("user") or {}).get("username") for entry in approvals.get("approved_by") or []
+        ],
+        "approvals_left": approvals.get("approvals_left"),
+        "head_commit_at": head_at.isoformat() if head_at else None,
+        "failed_jobs": failed_jobs,
+        "rework_requested_at": rework_requested_at.isoformat() if rework_requested_at else None,
+        "rework_pending": rework_pending,
+        "ai_review": ai_out,
+        "unresolved_threads": unresolved,
+        "comments_since_handoff": new_comments,
+        "feedback": feedback,
+    }
+
+
+def redispatch(
+    record: dict[str, Any], item: dict[str, Any], max_redispatches: int
+) -> dict[str, Any]:
+    """Start a fresh run of the failed workflow on the same work item.
+
+    This is the dashboard's re-dispatch. The idempotency key is derived from
+    the failed attempt, so re-running the scan never dispatches the same
+    failure twice; the run count caps how often one item is retried, so a
+    deterministic failure cannot burn a run on every scheduled scan.
+    """
+    if item.get("lifecycle") != "open":
+        return {"status": "skipped", "why": "work item is closed"}
+    workflow = record.get("workflow")
+    project = record["stok_project"]
+    raw = parse_json(
+        sh(["stok", "status", item["id"], "-p", project, "--runs", "--json"]),
+        f"stok status --runs {item['id']}",
+    )
+    runs = (raw.get("data") or {}).get("runs") or []
+    if isinstance(runs, dict):
+        runs = runs.get("items") or []
+    primaries = [r for r in runs if r.get("role") == "primary" and r.get("workflow_id") == workflow]
+    prior = max(len(primaries) - 1, 0)
+    if prior >= max_redispatches:
+        return {
+            "status": "skipped",
+            "why": f"already re-dispatched {prior} time(s); limit is {max_redispatches}",
+            "prior_redispatches": prior,
+        }
+
+    run = item.get("primary_run") or {}
+    outcome = run.get("outcome") or {}
+    attempt = (item.get("latest_result") or {}).get("attempt_id") or run.get("id")
+    cause = outcome.get("cause") or (item.get("latest_result") or {}).get("summary") or "unknown"
+    text = (
+        f"Re-dispatched by stokowski-stuck-check: the previous run failed at "
+        f"{record.get('stage') or 'an unknown stage'} (cause: {cause}). Resume from "
+        "the progress comment and the existing branch."
+    )
+    raw = parse_json(
+        sh(
+            [
+                "stok", "run", item["id"], "-p", project, "-w", workflow,
+                "--input", text,
+                "--idempotency-key", f"stuck-check-{item['id']}-{attempt}",
+                "--json",
+            ]
+        ),
+        f"stok run {item['id']}",
+    )
+    if not raw.get("ok"):
+        return {"status": "error", "why": str(raw.get("error"))[:300]}
+    data = raw.get("data") or {}
+    return {
+        "status": "dispatched",
+        "request_id": data.get("id"),
+        "run_id": (data.get("result") or {}).get("run_id"),
+        "cause": cause,
+        "prior_redispatches": prior,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Find testing-uplift work waiting on a human.")
     parser.add_argument(
@@ -557,7 +856,19 @@ def main() -> int:
         "--no-mr-check",
         action="store_true",
         help="skip GitLab verification of merge-request state (faster, but a "
-        "merge-review row can then be a merged or closed MR)",
+        "merge-review row can then be a merged or closed MR, and open MRs "
+        "are not triaged)",
+    )
+    parser.add_argument(
+        "--redispatch-failed",
+        action="store_true",
+        help="start a fresh run on every work item whose run failed (the one write)",
+    )
+    parser.add_argument(
+        "--max-redispatches",
+        type=int,
+        default=2,
+        help="stop re-dispatching an item after this many earlier re-dispatches (default 2)",
     )
     args = parser.parse_args()
 
@@ -843,7 +1154,73 @@ def main() -> int:
                 continue
 
         record["kind"] = "running"
+        # A running item can be a rework of an open MR; its MR still belongs
+        # in the MR triage, marked as already being addressed.
+        mrs, mr_check = mrs_for(ticket, item, stage)
+        record.update(mrs=mrs, mr_check=mr_check)
         buckets["healthy"].append(record)
+
+    redispatched: list[dict[str, Any]] = []
+    if args.redispatch_failed:
+        for record in list(buckets["needs_human"]):
+            if record.get("kind") != "failed":
+                continue
+            item = latest_by_ticket[record["ticket"]]
+            try:
+                outcome = redispatch(record, item, args.max_redispatches)
+            except (CommandError, OSError) as exc:
+                outcome = {"status": "error", "why": str(exc)[:300]}
+            record["redispatch"] = outcome
+            if outcome["status"] == "dispatched":
+                # The failure is handled; it no longer needs the human.
+                buckets["needs_human"].remove(record)
+                redispatched.append(record)
+
+    mr_triage: dict[str, list[dict[str, Any]]] = {
+        "draft": [],
+        "has_feedback": [],
+        "ready_to_merge": [],
+        "awaiting_review": [],
+    }
+    if not args.no_mr_check:
+        try:
+            me = gitlab_json("user").get("username")
+        except (CommandError, OSError):
+            me = None
+        seen: set[str] = set()
+        for name in ("code_review", "needs_human", "idle", "healthy"):
+            for record in buckets[name]:
+                for mr in record.get("mrs") or []:
+                    if mr.get("state") != "opened" or not mr.get("project_path"):
+                        continue
+                    if mr["url"] in seen:
+                        continue
+                    seen.add(mr["url"])
+                    try:
+                        triaged = triage_mr(mr, me)
+                    except (CommandError, OSError) as exc:
+                        errors.append(f"MR triage {mr['url']}: {str(exc)[:200]}")
+                        continue
+                    triaged.update(
+                        ticket=record["ticket"],
+                        ticket_summary=record["summary"],
+                        ticket_url=record["ticket_url"],
+                        ticket_kind=record.get("kind"),
+                        rework_running=name == "healthy",
+                    )
+                    # Offer a rework only where the comment can do something:
+                    # the run is parked at its merge review (so the comment
+                    # becomes a rework, not a side conversation), nothing is
+                    # already running or requested, and there is feedback.
+                    # Approved, mergeable MRs are left to the user's merge.
+                    triaged["rework_eligible"] = bool(
+                        triaged["category"] in {"draft", "has_feedback"}
+                        and triaged["feedback"]
+                        and record.get("kind") == "merge_review"
+                        and not triaged["rework_running"]
+                        and not triaged["rework_pending"]
+                    )
+                    mr_triage[triaged["category"]].append(triaged)
 
     for records in buckets.values():
         records.sort(key=lambda r: (-(r.get("age_days") or r.get("ticket_age_days") or 0), r["ticket"]))
@@ -877,11 +1254,17 @@ def main() -> int:
             "truncated": truncated,
         },
         "thresholds": {"idle_days": args.idle_days, "stall_hours": args.stall_hours},
-        "counts": {name: len(records) for name, records in buckets.items()},
+        "counts": {
+            **{name: len(records) for name, records in buckets.items()},
+            "redispatched": len(redispatched),
+            "mr_triage": {name: len(rows) for name, rows in mr_triage.items()},
+        },
         "code_review": buckets["code_review"],
         "needs_human": buckets["needs_human"],
         "idle": buckets["idle"],
         "healthy": buckets["healthy"],
+        "redispatched": redispatched,
+        "mr_triage": mr_triage,
         "warnings": warnings,
         "errors": errors,
     }
