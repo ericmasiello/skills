@@ -26,6 +26,7 @@ Resolve `<this-skill>` to the directory holding this `SKILL.md` (e.g. `~/.agents
 - `--board ERICRULEZ` limits to one board (repeatable).
 - `--idle-days 3` sets when a wait counts as stale.
 - `--stall-hours 6` sets when a silent running item counts as stalled.
+- `--review-wait-hours 24` sets how long an MR must have sat ready for review before [Waiting on a reviewer](#open-mrs) reports it at all.
 - `--no-mr-check` skips the GitLab verification and the MR triage. Only for working offline: without it a `merge-review` row may name a merged or closed MR.
 
 Exit `0` means the scan is sound. Exit `1` means the scan itself failed or was truncated — read `errors`, report it, and do not present partial results as complete. A clean exit with empty buckets is the normal all-clear, not an error.
@@ -60,9 +61,13 @@ Rows at an audit or plan gate also carry `plan_check` and `plan_comment_at`. `pl
 | `has_feedback` | Not draft, not mergeable yet, and `feedback` is non-empty. |
 | `awaiting_review` | Not draft, no feedback, no approval yet. Nobody has looked; nothing for the user to do. |
 
-`feedback` is the list of reasons someone has to act: a `failed`/`canceled` pipeline with the failing checks named (`failed_jobs`, each with a link), a Percy visual review (`visual_review`: someone must approve the snapshots in Percy, at its `url`), `needs rebase` or `merge conflicts`, AI review findings (`must_fix` and `suggestions` titles under `ai_review`), `unresolved_threads`, and `comments_since_handoff` (human comments newer than the last rework request or Stokowski push). Each thread entry carries `author`, `excerpt`, and a `url` straight to the note. `rework_running: true` means Stokowski is already reworking the MR right now; say so, because the feedback may be addressed in minutes. `rework_pending: true` means you already asked for a rework and nothing has been pushed since; say "rework requested" in the row. `rework_failed` means Stokowski answered the request with "I couldn't finish this step" and pushed nothing; say "rework failed: <reason>" with its link, and the MR can be offered again. `blocking_threads` lists open threads that you or a bot started (old rework requests, AI reviews, bot nudges): nobody else will resolve them, and any open thread keeps the merge button disabled, so name them with a "resolve" action. `answered_threads` are reviewer threads Stokowski has already replied to: they wait on that reviewer, never on a rework, so write "answered, waiting on <author>".
+`feedback` is the list of reasons someone has to act: a `failed`/`canceled` pipeline naming the failing checks in a parenthetical (`failed_jobs`, each with a link; "no failing job listed" when nothing names one), a Percy visual review (`visual_review`: someone must approve the snapshots in Percy, at its `url`), `needs rebase` or `merge conflicts`, AI review findings (`must_fix` and `suggestions` titles under `ai_review`), `unresolved_threads`, and `comments_since_handoff` (human comments newer than the last rework request or Stokowski push). It reports every live issue, including ones already asked about, so the row stays honest about what is actually broken. Each thread entry carries `author`, `excerpt`, and a `url` straight to the note. `rework_running: true` means Stokowski is already reworking the MR right now; say so, because the feedback may be addressed in minutes. `rework_pending: true` means you already asked for a rework and nothing has been pushed since; say "rework requested" in the row. `rework_failed` means Stokowski answered the request with "I couldn't finish this step" and pushed nothing; say "rework failed: <reason>" with its link, and the MR can be offered again. `blocking_threads` lists open threads that you or a bot started (old rework requests, AI reviews, bot nudges): nobody else will resolve them, and any open thread keeps the merge button disabled, so name them with a "resolve" action. `answered_threads` are reviewer threads Stokowski has already replied to: they wait on that reviewer, never on a rework, so write "answered, waiting on <author>".
 
-`rework_eligible: true` marks the MRs a click can rework: draft or has feedback, the run parked at merge review, no rework running or pending, and something in `rework_feedback` (the feedback minus the Percy review, which no code change clears). In the Pipeline column, write a Percy-only failure as "🖼 Percy: 5 visual changes" with its link, not ❌, and put "approve in Percy" in the action cell. Approved, mergeable MRs are never eligible; merging is the user's call.
+`has_new_feedback` is narrower than `feedback`: true only when something in it was never named in a past `@stokowski-native` comment on this MR — a job name, the rebase marker, and thread URLs are fingerprinted from your own prior comments and checked against what's still live. A push that doesn't fix anything clears `rework_pending` without teaching Stokowski anything new, so `rework_eligible` gates on `has_new_feedback`, not on `feedback` being merely non-empty. `already_requested: true` marks an MR where `feedback` is non-empty but none of it is new — say "already requested, still unresolved" rather than offering a fresh ask; `repeat_failed_jobs`, `repeat_rebase`, and `repeat_unresolved_threads` name exactly which part is the repeat.
+
+`rework_eligible: true` marks the MRs a click can rework: draft or has feedback, the run parked at merge review, nothing new that hasn't already been asked for, and no rework running or pending. `has_new_feedback` implies something in `rework_feedback` (the feedback minus the Percy review, which no code change clears). In the Pipeline column, write a Percy-only failure as "🖼 Percy: 5 visual changes" with its link, not ❌, and put "approve in Percy" in the action cell. Approved, mergeable MRs are never eligible; merging is the user's call.
+
+`ready_for_review_at` is when a reviewer was actually asked to look — the moment the MR came off draft, or its creation time if it was never a draft — and `review_wait_hours` is the hours since. `review_wait_long: true` once that passes `--review-wait-hours` (default 24); it is the only gate on [Waiting on a reviewer](#open-mrs).
 
 Translate `stage` into plain words in the report rather than pasting the raw value:
 
@@ -75,7 +80,7 @@ Translate `stage` into plain words in the report rather than pasting the raw val
 
 ## Report
 
-Lead with one line: how many tickets were scanned, how many runs were re-dispatched, how many MRs are ready to merge, and how many items need a decision. Then emit only the sections that have rows, in this order: re-dispatched, ready to merge, MRs with feedback, drafts, waiting on a reviewer, needs a decision or fix, idle. Every section is a table with one ticket per row, using the columns shown below; never fold several tickets into one row or a section into a sentence. The user is scanning for work, so every row answers *which ticket*, *what is true right now*, and *what they can do about it*.
+Lead with one line: how many tickets were scanned, how many runs were re-dispatched, how many MRs are ready to merge, and how many items need a decision. Then emit only the sections that have rows (waiting on a reviewer additionally needs a row with `review_wait_long: true`), in this order: re-dispatched, ready to merge, MRs with feedback, drafts, waiting on a reviewer, needs a decision or fix, idle. Every section is a table with one ticket per row, using the columns shown below; never fold several tickets into one row or a section into a sentence. The user is scanning for work, so every row answers *which ticket*, *what is true right now*, and *what they can do about it*.
 
 ### Re-dispatched
 
@@ -108,14 +113,16 @@ The MR triage replaces the old code-review list: `code_review` rows all appear h
 | [ERICRULEZ-369](url) … | [!13892](url) | ❌ failed | not needed | 2 AI suggestions: restore test never checks the tracking event; `clearAllMocks` reason doesn't hold |
 
 ## Waiting on a reviewer
-| Ticket | MR | Pipeline | Approvals |
-|---|---|---|---|
-| [ERICRULEZ-346](url) … | [!13849](url) | ✅ | 1 of 2 (aarbi) |
+| Ticket | MR | Pipeline | Waiting | Approvals |
+|---|---|---|---|---|
+| [ERICRULEZ-346](url) … | [!13849](url) | ✅ | 2.1d | 1 of 2 (aarbi) |
 ```
 
 - Name the feedback, not its count: the AI finding titles and each thread's excerpt with its link, so the user can act without opening the MR. Collapse to "N more" past three per row.
 - Say whether a must-fix or a failed pipeline is the blocker; those come before suggestions in the cell.
 - A `ready_to_merge` row may still carry suggestions. Show them as notes: GitLab already permits the merge, so they are the user's call, not a blocker.
+- **If `already_requested` is true and `rework_eligible` is false, say so instead of restating the feedback as actionable**: "already requested Nov 3, still unresolved — not re-asking" beats repeating the same job name or rebase note as if it were new. These rows are never offered in [Offer reworks](#offer-reworks).
+- **Omit `## Waiting on a reviewer` entirely unless at least one `awaiting_review` MR has `review_wait_long: true`.** Nobody has looked yet is only worth a human's attention once it's sat that way for a while (24h by default); a fresh MR with no reviewer yet is not news. When the section does appear, include only the rows that qualify, not every `awaiting_review` MR.
 - `awaiting_review` MRs wait on a reviewer, not on the user; the table says so by having no action column.
 
 ### Needs a decision or fix
@@ -160,10 +167,10 @@ General rules:
 
 ## Offer reworks
 
-After the report, when at least one MR is `rework_eligible`, ask with the `question` tool, `multiple: true`, one option per eligible MR. This is the click: each selected MR gets a `@stokowski-native fix the following:` comment carrying its feedback, and Stokowski answers it, sends its merge review back for rework, and pushes the fix.
+After the report, when at least one MR is `rework_eligible`, ask with the `question` tool, `multiple: true`, one option per eligible MR. This is the click: each selected MR gets a `@stokowski-native fix the following:` comment carrying its feedback, and Stokowski answers it, sends its merge review back for rework, and pushes the fix. Never offer an `already_requested` MR here, even if its `feedback` list looks identical to an eligible one's — the scan already excluded it from `rework_eligible` because none of that feedback is new.
 
 - Label: `!<iid> <ticket key>`. Description: the feedback in priority order, e.g. "pipeline failed (lint) · 1 must-fix · 2 suggestions".
-- Post the selection: `python3 <this-skill>/scripts/request_rework.py --scan <tmp>/stuck-check.json --mr <url> [--mr <url> ...]`. It builds each comment from the scan (failed job links, rebase, the AI review's must-fix and suggestion sections verbatim, reviewer threads quoted with links) and refuses any MR not marked `rework_eligible`. Write every `--mr <url>` pair out literally or expand a shell array; zsh does not word-split a `$ARGS` string, so the script sees no `--mr` at all.
+- Post the selection: `python3 <this-skill>/scripts/request_rework.py --scan <tmp>/stuck-check.json --mr <url> [--mr <url> ...]`. It builds each comment from only the MR's *new* feedback (failed job links, rebase, the AI review's must-fix and suggestion sections verbatim, reviewer threads quoted with links) and refuses any MR not marked `rework_eligible`. Write every `--mr <url>` pair out literally or expand a shell array; zsh does not word-split a `$ARGS` string, so the script sees no `--mr` at all.
 - Report one row per MR: ticket, MR, and the posted note link, or the `why` for any skip or error.
 - A scheduled run has nobody to answer: skip the question and end the report with the eligible MRs as a table.
 - An empty selection means post nothing.
@@ -206,4 +213,6 @@ Fallback phrasing for the `Your options` cell when the run's own summary is thin
 - **A rework request opens a thread that nobody resolves.** Each `@stokowski-native` comment is a resolvable discussion. Once the rework lands it still blocks the merge (`discussions_not_resolved`), as on !13872 and !13919. These show up in `blocking_threads`.
 - **A red pipeline is often only Percy.** On 2026-11-04, 13 of 15 failed studio pipelines had every job and child pipeline green. The only failure was Percy's external commit status, "N visual changes need review", on MRs that only add tests. The script reads the head commit's statuses rather than the pipeline's jobs, names the real failing checks, and keeps Percy out of rework requests.
 - **Merging an MR cancels its run.** ERICRULEZ-352 and 399 merged at 21:47Z on 2026-11-03 and their runs were cancelled at 22:06Z. A `cancelled` row whose MR merged is reported as `mr_merged_ticket_open` in `idle`, not as a decision.
+- **A push doesn't mean the thing asked for got fixed.** `rework_pending` only tracks whether *anything* was pushed since the last request, so a push that touches an unrelated file leaves the same job failing and, on the next scan, `rework_eligible` flips back to true for exactly the feedback already asked about. On 2026-11-04, four MRs (!13905, !13872, !13881, !13916) would have been re-asked to fix the same already-named failing job a second time. The script now fingerprints job names, the rebase marker, and thread URLs out of its own past `@stokowski-native` comments and only calls something `has_new_feedback` if it wasn't already named; `already_requested` marks the rest.
+- **A ready MR is not the same as a new MR.** `review_wait_hours` starts at the "marked this merge request as ready" system note, not the MR's creation time, so an MR opened as a draft weeks ago and only un-drafted an hour before the scan reports as freshly waiting, not stale.
 - If `scope.truncated` reports anything true, say so in the report; the check is incomplete by definition at that point.
