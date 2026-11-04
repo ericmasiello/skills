@@ -655,12 +655,15 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         body = opener.get("body") or ""
         author = (opener.get("author") or {}).get("username")
         created = parse_ts(opener.get("created_at"))
-        if AI_REVIEW_MARKER in body:
-            if ai_review is None or (created and created > ai_review["_at"]):
-                ai_review = {"_at": created, **parse_ai_review(body)}
-            continue
+        # The rework check runs first: a rework comment quotes the AI review,
+        # and on 2026-11-04 the quote carried the review's hidden marker, so
+        # the requests read as fresh reviews and were offered again.
         if author == me and REWORK_MENTION in body:
             rework_requested_at = newest(rework_requested_at, created)
+            continue
+        if AI_REVIEW_MARKER in body and is_bot(author):
+            if ai_review is None or (created and created > ai_review["_at"]):
+                ai_review = {"_at": created, **parse_ai_review(body)}
             continue
         if is_bot(author) or author == me:
             continue
@@ -1098,6 +1101,17 @@ def main() -> int:
                 mrs=mrs,
                 mr_check=mr_check,
             )
+            # Merging an MR cancels the run parked at its merge review, so a
+            # cancelled run with a merged MR is landed work, not a decision.
+            # ERICRULEZ-352 and 399 on 2026-11-03: merged 21:47Z, cancelled 22:06Z.
+            if (
+                state == "cancelled"
+                and not any(mr.get("state") == "opened" for mr in mrs)
+                and any(mr.get("state") in {"merged", "locked"} for mr in mrs)
+            ):
+                record.update(kind="mr_merged_ticket_open", mr_state="merged")
+                buckets["idle"].append(record)
+                continue
             buckets["needs_human"].append(record)
             record["plan_check"] = "not_applicable"
             if any(marker in stage for marker in PLAN_STAGE_MARKERS):
