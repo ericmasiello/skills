@@ -7,15 +7,17 @@ description: Find testing-uplift work that Stokowski has parked on a human — e
 
 Stokowski hands control back to a human in three ways, and only one of them is good news. This skill separates them, so a run that is quietly rotting does not hide behind the merge requests that are merely waiting for review.
 
-Scope is the testing-uplift workflows (`coverage-execute`, `coverage-audit`, `install-mutation-testing`) on the `ERICRULEZ` and `DEX` boards. One write, and only in Stokowski: a failed run is re-dispatched, the same as the dashboard's re-dispatch. Everything else is read-only; this skill never writes to Jira or GitLab, and never answers a gate.
+Scope is the testing-uplift workflows (`coverage-execute`, `coverage-audit`, `install-mutation-testing`) on the `ERICRULEZ` and `DEX` boards. Two writes. A failed run is re-dispatched, the same as the dashboard's re-dispatch. And a rework comment is posted on each MR the user picks in [Offer reworks](#offer-reworks), and only on those. Everything else is read-only: this skill never writes to Jira and never answers a gate.
 
 Requires `twg` authenticated against `vistaprint.atlassian.net` (see [`vista-atlassian`](../vista-atlassian/SKILL.md)), `stok` authenticated against Stokowski (see [`stokowski-cli`](../stokowski-cli/SKILL.md)), and — unless you pass `--no-mr-check` — `glab` authenticated against `gitlab.com`, because the script opens every claimed merge request to confirm it still is one.
 
 ## Run it
 
 ```
-python3 <this-skill>/scripts/scan.py --redispatch-failed
+python3 <this-skill>/scripts/scan.py --redispatch-failed > <tmp>/stuck-check.json
 ```
+
+Write the JSON to a file in the session's temp directory and read it from there: the output runs to hundreds of kilobytes, which the shell truncates, and [Offer reworks](#offer-reworks) needs the same file.
 
 Resolve `<this-skill>` to the directory holding this `SKILL.md` (e.g. `~/.agents/skills/stokowski-stuck-check`). The script prints one JSON document and takes two to four minutes, so run it with a shell timeout of at least 300 seconds: one label query, one `stok list` per project, one batched ticket hydrate, a `stok status` call for each work item that needs explaining, a GitLab check for every ticket whose stage claims a merge request, a Jira comment read for every audit gate, a `stok run` per failed item, and four GitLab reads per open MR.
 
@@ -58,7 +60,9 @@ Rows at an audit or plan gate also carry `plan_check` and `plan_comment_at`. `pl
 | `has_feedback` | Not draft, not mergeable yet, and `feedback` is non-empty. |
 | `awaiting_review` | Not draft, no feedback, no approval yet. Nobody has looked; nothing for the user to do. |
 
-`feedback` is the list of reasons someone has to act: a `failed`/`canceled` pipeline, `needs rebase` or `merge conflicts`, AI review findings (`must_fix` and `suggestions` titles under `ai_review`), `unresolved_threads`, and `comments_since_push` (human comments newer than the last commit). Each thread entry carries `author`, `excerpt`, and a `url` straight to the note. `rework_running: true` means Stokowski is already reworking the MR right now; say so, because the feedback may be addressed in minutes.
+`feedback` is the list of reasons someone has to act: a `failed`/`canceled` pipeline, `needs rebase` or `merge conflicts`, AI review findings (`must_fix` and `suggestions` titles under `ai_review`), `unresolved_threads`, and `comments_since_handoff` (human comments newer than the last rework request or Stokowski push). Each thread entry carries `author`, `excerpt`, and a `url` straight to the note. `rework_running: true` means Stokowski is already reworking the MR right now; say so, because the feedback may be addressed in minutes. `rework_pending: true` means you already asked for a rework and nothing has been pushed since; say "rework requested" in the row.
+
+`rework_eligible: true` marks the MRs a click can rework: draft or has feedback, the run parked at merge review, and no rework running or pending. Approved, mergeable MRs are never eligible; merging is the user's call.
 
 Translate `stage` into plain words in the report rather than pasting the raw value:
 
@@ -154,6 +158,16 @@ General rules:
 - **Omit empty sections.** If every bucket is empty, the whole report is one line: `Nothing stuck in the testing uplift (<n> tickets).`
 - **Report `warnings` verbatim-ish** when non-empty: they name rows whose MR state could not be checked, which the reader must not mistake for "no MR".
 
+## Offer reworks
+
+After the report, when at least one MR is `rework_eligible`, ask with the `question` tool, `multiple: true`, one option per eligible MR. This is the click: each selected MR gets a `@stokowski-native fix the following:` comment carrying its feedback, and Stokowski answers it, sends its merge review back for rework, and pushes the fix.
+
+- Label: `!<iid> <ticket key>`. Description: the feedback in priority order, e.g. "pipeline failed (lint) · 1 must-fix · 2 suggestions".
+- Post the selection: `python3 <this-skill>/scripts/request_rework.py --scan <tmp>/stuck-check.json --mr <url> [--mr <url> ...]`. It builds each comment from the scan (failed job links, rebase, the AI review's must-fix and suggestion sections verbatim, reviewer threads quoted with links) and refuses any MR not marked `rework_eligible`.
+- Report one row per MR: ticket, MR, and the posted note link, or the `why` for any skip or error.
+- A scheduled run has nobody to answer: skip the question and end the report with the eligible MRs as a table.
+- An empty selection means post nothing.
+
 ## Options vocabulary
 
 Fallback phrasing for the `Your options` cell when the run's own summary is thin. Each is a suggestion the user may take; the only one this skill performs itself is re-dispatching a `failed` run.
@@ -185,5 +199,6 @@ Fallback phrasing for the `Your options` cell when the run's own summary is thin
 - **`--all` is not optional.** A work item can be closed while its ticket is still open; without `--all` that case vanishes instead of showing up as `closed_without_success`.
 - **DEX returning zero rows is normal** — VADP tickets carry `workflow:gitlab-first`, not these uplift labels. It is not a broken query.
 - **Re-dispatch is `stok run`, not `stok dispatch`.** `dispatch` creates a new work item and orphans the ticket's progress comment and branch; `run -w <workflow>` on the existing item starts a new primary run in place. Verified on ERICRULEZ-343 on 2026-11-03: the failed run stayed in the run list and the new one started at `coverage-execute-implement`. The idempotency key is built from the failed attempt id, so two scans of the same failure send one request.
-- **The AI review runs once per MR.** A push after the review usually means a rework already took its findings (often via an `@stokowski-native fix the following` comment), so the script marks that review `stale` and does not count its findings as outstanding. GitLab's `discussions_not_resolved` status, not the AI note, is what blocks a merge.
+- **The AI review runs once per MR, and a push does not answer it.** Its findings count as handled only once a `@stokowski-native` comment from you or a Stokowski push lands after the review; the script then marks the review `stale`. Commit dates were the first signal and failed on 2026-11-03: a batch rebase made every review look older than the head commit and hid findings nobody had acted on.
+- **A rework comment can lag by hours.** On !13905 the request was posted at 10:53 and Stokowski's "Rework requested" reply and the gate change arrived at 19:07. `rework_pending` keeps the MR out of the next offer until something is pushed after the request, so a slow rework is not requested twice. Any account's push ends it: Stokowski's rework pushes on studio MRs show up under the human assignee. GitLab's `discussions_not_resolved` status, not the AI note, is what blocks a merge.
 - If `scope.truncated` reports anything true, say so in the report; the check is incomplete by definition at that point.

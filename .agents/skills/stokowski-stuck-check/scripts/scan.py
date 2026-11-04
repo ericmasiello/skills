@@ -145,6 +145,10 @@ PIPELINE_BAD = {"failed", "canceled"}
 # Automation that comments on MRs. Its notes are not reviewer feedback.
 BOT_AUTHOR_PREFIXES = ("project_", "sa-", "group_")
 
+# Mentioning the Stokowski GitLab bot on an MR opens a conversation that, when
+# the comment asks for changes, sends the merge review back for rework.
+REWORK_MENTION = "@stokowski-native"
+
 
 class CommandError(RuntimeError):
     pass
@@ -571,8 +575,14 @@ def parse_ai_review(body: str) -> dict[str, Any]:
     """Split an AI review note into its verdict and finding titles per section."""
     verdict = "changes_requested" if "changes requested" in body.lower() else "approved"
     findings: dict[str, list[str]] = {"must_fix": [], "suggestions": []}
+    # The sections verbatim, heading included, so a rework request can quote
+    # the reviewer's own file paths, snippets, and proposed fixes.
+    sections_md: dict[str, list[str]] = {"must_fix": [], "suggestions": []}
     section = None
     for line in body.splitlines():
+        if line.startswith("## "):
+            section = None
+            continue
         if line.startswith("### "):
             heading = line.lower()
             section = (
@@ -580,12 +590,20 @@ def parse_ai_review(body: str) -> dict[str, Any]:
                 else "suggestions" if "suggestion" in heading
                 else None
             )
+            if section:
+                sections_md[section].append(line)
             continue
+        if section:
+            sections_md[section].append(line)
         # Each finding opens with a bold conventional-comment label, e.g.
         # "**suggestion: Distribute click tests ...** `info`".
         if section and line.startswith("**") and ":" in line[:40]:
             findings[section].append(line.strip().strip("`").replace("**", "")[:160])
-    return {"verdict": verdict, **findings}
+    markdown = {
+        f"{name}_md": "\n".join(lines).strip().removesuffix("---").strip()
+        for name, lines in sections_md.items()
+    }
+    return {"verdict": verdict, **findings, **markdown}
 
 
 def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
@@ -606,11 +624,31 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     merge_status = detail.get("detailed_merge_status")
     web_url = detail.get("web_url") or mr.get("url")
 
+    def newest(current: datetime | None, candidate: datetime | None) -> datetime | None:
+        if candidate is None:
+            return current
+        return candidate if current is None or candidate > current else current
+
     ai_review: dict[str, Any] | None = None
     unresolved: list[dict[str, Any]] = []
-    new_comments: list[dict[str, Any]] = []
+    plain_comments: list[tuple[datetime | None, dict[str, Any]]] = []
+    rework_requested_at: datetime | None = None
+    stokowski_push_at: datetime | None = None
+    any_push_at: datetime | None = None
     for discussion in discussions or []:
-        notes = [note for note in discussion.get("notes") or [] if not note.get("system")]
+        all_notes = discussion.get("notes") or []
+        for note in all_notes:
+            body_text = note.get("body") or ""
+            if not (note.get("system") and body_text.startswith("added ") and "commit" in body_text):
+                continue
+            pushed = parse_ts(note.get("created_at"))
+            any_push_at = newest(any_push_at, pushed)
+            # A push by the bot is Stokowski reworking on its own. A push under
+            # a human account alone addresses no feedback: it is often just a
+            # rebase.
+            if is_bot((note.get("author") or {}).get("username")):
+                stokowski_push_at = newest(stokowski_push_at, pushed)
+        notes = [note for note in all_notes if not note.get("system")]
         if not notes:
             continue
         opener = notes[0]
@@ -621,31 +659,64 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
             if ai_review is None or (created and created > ai_review["_at"]):
                 ai_review = {"_at": created, **parse_ai_review(body)}
             continue
+        if author == me and REWORK_MENTION in body:
+            rework_requested_at = newest(rework_requested_at, created)
+            continue
         if is_bot(author) or author == me:
             continue
         entry = {
             "author": author,
             "excerpt": first_line(body),
+            "body": body.strip()[:2000],
             "url": f"{web_url}#note_{opener.get('id')}",
         }
         if opener.get("resolvable") and not opener.get("resolved"):
             unresolved.append(entry)
-        elif created and head_at and created > head_at:
-            # A plain comment only counts as open feedback when nothing was
-            # pushed after it; an older one was either answered or ignored.
-            new_comments.append(entry)
+        else:
+            plain_comments.append((created, entry))
+
+    # Feedback counts as handed off once it was sent to Stokowski or Stokowski
+    # pushed after it. Commit dates cannot say this: on 2026-11-03 a batch
+    # rebase made every AI review look older than the head commit, which hid
+    # findings nobody had acted on.
+    handled_at = newest(rework_requested_at, stokowski_push_at)
+    new_comments = [
+        entry for created, entry in plain_comments
+        if handled_at is None or (created and created > handled_at)
+    ]
 
     ai_out = None
     if ai_review:
         reviewed_at = ai_review.pop("_at")
-        # The AI reviewer runs once per MR. A push after it usually means a
-        # rework already acted on its findings, so they are not outstanding.
-        stale = bool(head_at and reviewed_at and head_at > reviewed_at)
+        stale = bool(handled_at and reviewed_at and handled_at > reviewed_at)
         ai_out = {
             **ai_review,
             "reviewed_at": reviewed_at.isoformat() if reviewed_at else None,
             "stale": stale,
         }
+
+    failed_jobs: list[dict[str, Any]] = []
+    pipeline_id = (detail.get("head_pipeline") or {}).get("id")
+    if pipeline in PIPELINE_BAD and pipeline_id:
+        try:
+            jobs = gitlab_json(
+                f"projects/{encoded}/pipelines/{pipeline_id}/jobs?scope[]=failed&per_page=50"
+            )
+        except (CommandError, OSError):
+            jobs = []
+        failed_jobs = [
+            {"name": job.get("name"), "stage": job.get("stage"), "url": job.get("web_url")}
+            for job in jobs or []
+            if not job.get("allow_failure")
+        ]
+
+    # A rework request stays pending until anything is pushed after it; until
+    # then a second request would only queue a duplicate rework. Any account
+    # counts here: Stokowski's rework pushes on studio MRs are attributed to
+    # the MR's human assignee (!13915, !13906 on 2026-11-03).
+    rework_pending = bool(
+        rework_requested_at and (any_push_at is None or rework_requested_at > any_push_at)
+    )
 
     feedback: list[str] = []
     if pipeline in PIPELINE_BAD:
@@ -662,7 +733,7 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     if unresolved:
         feedback.append(f"{len(unresolved)} unresolved thread(s)")
     if new_comments:
-        feedback.append(f"{len(new_comments)} reviewer comment(s) since last push")
+        feedback.append(f"{len(new_comments)} reviewer comment(s) not yet sent to Stokowski")
 
     approved = bool(approvals.get("approved"))
     if detail.get("draft"):
@@ -689,9 +760,12 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         ],
         "approvals_left": approvals.get("approvals_left"),
         "head_commit_at": head_at.isoformat() if head_at else None,
+        "failed_jobs": failed_jobs,
+        "rework_requested_at": rework_requested_at.isoformat() if rework_requested_at else None,
+        "rework_pending": rework_pending,
         "ai_review": ai_out,
         "unresolved_threads": unresolved,
-        "comments_since_push": new_comments,
+        "comments_since_handoff": new_comments,
         "feedback": feedback,
     }
 
@@ -1133,6 +1207,18 @@ def main() -> int:
                         ticket_url=record["ticket_url"],
                         ticket_kind=record.get("kind"),
                         rework_running=name == "healthy",
+                    )
+                    # Offer a rework only where the comment can do something:
+                    # the run is parked at its merge review (so the comment
+                    # becomes a rework, not a side conversation), nothing is
+                    # already running or requested, and there is feedback.
+                    # Approved, mergeable MRs are left to the user's merge.
+                    triaged["rework_eligible"] = bool(
+                        triaged["category"] in {"draft", "has_feedback"}
+                        and triaged["feedback"]
+                        and record.get("kind") == "merge_review"
+                        and not triaged["rework_running"]
+                        and not triaged["rework_pending"]
                     )
                     mr_triage[triaged["category"]].append(triaged)
 
