@@ -142,12 +142,19 @@ REBASE_STATUSES = {"need_rebase", "conflict"}
 
 PIPELINE_BAD = {"failed", "canceled"}
 
+# Commit statuses whose name starts with this are visual-snapshot reviews: a
+# person approves them in Percy, and no code change in a rework clears them.
+VISUAL_REVIEW_PREFIX = "percy"
+
 # Automation that comments on MRs. Its notes are not reviewer feedback.
 BOT_AUTHOR_PREFIXES = ("project_", "sa-", "group_")
 
 # Mentioning the Stokowski GitLab bot on an MR opens a conversation that, when
 # the comment asks for changes, sends the merge review back for rework.
 REWORK_MENTION = "@stokowski-native"
+
+# How Stokowski's GitLab bot opens its reply when it could not run a step.
+REWORK_FAILED_PREFIX = "**I couldn't finish this step.**"
 
 
 class CommandError(RuntimeError):
@@ -635,6 +642,9 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     rework_requested_at: datetime | None = None
     stokowski_push_at: datetime | None = None
     any_push_at: datetime | None = None
+    rework_failed: dict[str, Any] | None = None
+    blocking: list[dict[str, Any]] = []
+    answered: list[dict[str, Any]] = []
     for discussion in discussions or []:
         all_notes = discussion.get("notes") or []
         for note in all_notes:
@@ -649,21 +659,61 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
             if is_bot((note.get("author") or {}).get("username")):
                 stokowski_push_at = newest(stokowski_push_at, pushed)
         notes = [note for note in all_notes if not note.get("system")]
+        for note in notes:
+            # Stokowski answers a rework it could not start (a pod that never
+            # came up, on !13850 and !13846 on 2026-11-04) with this note and
+            # pushes nothing, so without it the request would read as pending
+            # forever.
+            note_body = (note.get("body") or "").lstrip()
+            if is_bot((note.get("author") or {}).get("username")) and note_body.startswith(
+                REWORK_FAILED_PREFIX
+            ):
+                failed_at = parse_ts(note.get("created_at"))
+                if rework_failed is None or (failed_at and failed_at > rework_failed["_at"]):
+                    quoted = next(
+                        (line[1:].strip() for line in note_body.splitlines() if line.startswith(">")),
+                        "",
+                    )
+                    rework_failed = {
+                        "_at": failed_at,
+                        "reason": quoted[:200],
+                        "url": f"{web_url}#note_{note.get('id')}",
+                    }
         if not notes:
             continue
         opener = notes[0]
         body = opener.get("body") or ""
         author = (opener.get("author") or {}).get("username")
         created = parse_ts(opener.get("created_at"))
+        open_thread = bool(opener.get("resolvable") and not opener.get("resolved"))
+        if open_thread and (author == me or is_bot(author)):
+            # Threads nobody else will resolve: your own rework requests and
+            # bot notes. Any open thread blocks the merge button.
+            blocking.append(
+                {
+                    "author": author,
+                    "excerpt": (
+                        "your rework request" if REWORK_MENTION in body
+                        else "AI review" if AI_REVIEW_MARKER in body
+                        else first_line(body)
+                    ),
+                    "url": f"{web_url}#note_{opener.get('id')}",
+                }
+            )
         # The rework check runs first: a rework comment quotes the AI review,
         # and on 2026-11-04 the quote carried the review's hidden marker, so
         # the requests read as fresh reviews and were offered again.
         if author == me and REWORK_MENTION in body:
             rework_requested_at = newest(rework_requested_at, created)
             continue
-        if AI_REVIEW_MARKER in body and is_bot(author):
-            if ai_review is None or (created and created > ai_review["_at"]):
-                ai_review = {"_at": created, **parse_ai_review(body)}
+        if AI_REVIEW_MARKER in body:
+            # The reviewer rewrites the newest note carrying its marker in
+            # place, so `updated_at` dates the review. It also rewrote the
+            # rework comments that carried the marker by mistake (!13912,
+            # !13919), which is why the author can be you, not the bot.
+            reviewed = parse_ts(opener.get("updated_at")) or created
+            if ai_review is None or (reviewed and reviewed > ai_review["_at"]):
+                ai_review = {"_at": reviewed, **parse_ai_review(body)}
             continue
         if is_bot(author) or author == me:
             continue
@@ -673,7 +723,11 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
             "body": body.strip()[:2000],
             "url": f"{web_url}#note_{opener.get('id')}",
         }
-        if opener.get("resolvable") and not opener.get("resolved"):
+        if open_thread and is_bot((notes[-1].get("author") or {}).get("username")):
+            # Stokowski has replied; the thread waits on its reviewer to
+            # resolve it, and another rework would repeat the answer (!13915).
+            answered.append(entry)
+        elif open_thread:
             unresolved.append(entry)
         else:
             plain_comments.append((created, entry))
@@ -698,20 +752,40 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
             "stale": stale,
         }
 
+    # Read failures from the commit's statuses, not the pipeline's jobs. On
+    # 2026-11-04, 13 of 15 red studio pipelines had every job green: the only
+    # failure was Percy's external "N visual changes need review" status,
+    # which never appears as a job. Percy needs a person to approve snapshots
+    # in Percy, so it is kept apart from failures a rework can fix.
     failed_jobs: list[dict[str, Any]] = []
-    pipeline_id = (detail.get("head_pipeline") or {}).get("id")
-    if pipeline in PIPELINE_BAD and pipeline_id:
+    visual_review: dict[str, Any] | None = None
+    head_pipeline = detail.get("head_pipeline") or {}
+    pipeline_id = head_pipeline.get("id")
+    if pipeline in PIPELINE_BAD and head_pipeline.get("sha"):
         try:
-            jobs = gitlab_json(
-                f"projects/{encoded}/pipelines/{pipeline_id}/jobs?scope[]=failed&per_page=50"
+            statuses = gitlab_json(
+                f"projects/{encoded}/repository/commits/{head_pipeline['sha']}/statuses?per_page=100"
             )
         except (CommandError, OSError):
-            jobs = []
-        failed_jobs = [
-            {"name": job.get("name"), "stage": job.get("stage"), "url": job.get("web_url")}
-            for job in jobs or []
-            if not job.get("allow_failure")
-        ]
+            statuses = []
+        latest: dict[str, dict[str, Any]] = {}
+        for status in sorted(statuses or [], key=lambda s: s.get("id") or 0):
+            if status.get("pipeline_id") in (pipeline_id, None):
+                latest[status.get("name") or ""] = status
+        for name, status in latest.items():
+            if status.get("status") not in PIPELINE_BAD or status.get("allow_failure"):
+                continue
+            entry = {
+                "name": name,
+                "description": status.get("description"),
+                # CI jobs carry no target_url here; the pipeline page is the
+                # nearest link that still shows the failing job.
+                "url": status.get("target_url") or head_pipeline.get("web_url"),
+            }
+            if name.lower().startswith(VISUAL_REVIEW_PREFIX):
+                visual_review = entry
+            else:
+                failed_jobs.append(entry)
 
     # A rework request stays pending until anything is pushed after it; until
     # then a second request would only queue a duplicate rework. Any account
@@ -720,9 +794,18 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     rework_pending = bool(
         rework_requested_at and (any_push_at is None or rework_requested_at > any_push_at)
     )
+    failed_at = rework_failed.pop("_at") if rework_failed else None
+    if rework_failed and rework_requested_at and failed_at and failed_at > rework_requested_at:
+        # Stokowski gave up on the request; it can be offered again.
+        rework_pending = False
+        rework_failed["at"] = failed_at.isoformat()
+    else:
+        rework_failed = None
 
     feedback: list[str] = []
-    if pipeline in PIPELINE_BAD:
+    if failed_jobs:
+        feedback.append(f"pipeline {pipeline} ({', '.join(job['name'] for job in failed_jobs)})")
+    elif pipeline in PIPELINE_BAD and not visual_review:
         feedback.append(f"pipeline {pipeline}")
     if merge_status in REBASE_STATUSES or detail.get("has_conflicts"):
         feedback.append("needs rebase" if merge_status == "need_rebase" else "merge conflicts")
@@ -737,6 +820,15 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         feedback.append(f"{len(unresolved)} unresolved thread(s)")
     if new_comments:
         feedback.append(f"{len(new_comments)} reviewer comment(s) not yet sent to Stokowski")
+    # Everything above is work a rework can do. The Percy approval is the
+    # user's, so it is feedback but never a reason to offer a rework.
+    rework_feedback = list(feedback)
+    if visual_review:
+        feedback.append(f"Percy: {visual_review['description'] or 'visual review failed'}")
+    if blocking:
+        feedback.append(f"{len(blocking)} open thread(s) from you or a bot to resolve")
+    if answered:
+        feedback.append(f"{len(answered)} answered thread(s) awaiting the reviewer")
 
     approved = bool(approvals.get("approved"))
     if detail.get("draft"):
@@ -764,8 +856,13 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         "approvals_left": approvals.get("approvals_left"),
         "head_commit_at": head_at.isoformat() if head_at else None,
         "failed_jobs": failed_jobs,
+        "visual_review": visual_review,
+        "rework_feedback": rework_feedback,
         "rework_requested_at": rework_requested_at.isoformat() if rework_requested_at else None,
         "rework_pending": rework_pending,
+        "rework_failed": rework_failed,
+        "blocking_threads": blocking,
+        "answered_threads": answered,
         "ai_review": ai_out,
         "unresolved_threads": unresolved,
         "comments_since_handoff": new_comments,
@@ -1202,8 +1299,12 @@ def main() -> int:
         except (CommandError, OSError):
             me = None
         seen: set[str] = set()
-        for name in ("code_review", "needs_human", "idle", "healthy"):
-            for record in buckets[name]:
+        # A re-dispatched run is reworking its MR right now, the same as a
+        # healthy one; leaving it out dropped !13919 from the 2026-11-04 triage.
+        sources = {name: buckets[name] for name in ("code_review", "needs_human", "idle", "healthy")}
+        sources["redispatched"] = redispatched
+        for name, records in sources.items():
+            for record in records:
                 for mr in record.get("mrs") or []:
                     if mr.get("state") != "opened" or not mr.get("project_path"):
                         continue
@@ -1220,7 +1321,7 @@ def main() -> int:
                         ticket_summary=record["summary"],
                         ticket_url=record["ticket_url"],
                         ticket_kind=record.get("kind"),
-                        rework_running=name == "healthy",
+                        rework_running=name in {"healthy", "redispatched"},
                     )
                     # Offer a rework only where the comment can do something:
                     # the run is parked at its merge review (so the comment
@@ -1229,7 +1330,7 @@ def main() -> int:
                     # Approved, mergeable MRs are left to the user's merge.
                     triaged["rework_eligible"] = bool(
                         triaged["category"] in {"draft", "has_feedback"}
-                        and triaged["feedback"]
+                        and triaged["rework_feedback"]
                         and record.get("kind") == "merge_review"
                         and not triaged["rework_running"]
                         and not triaged["rework_pending"]

@@ -31,20 +31,25 @@ def build_comment(mr: dict[str, Any]) -> str:
 
     if mr.get("failed_jobs"):
         jobs = "\n".join(
-            f"- [{job['name']}]({job['url']}) ({job['stage']})" for job in mr["failed_jobs"]
+            f"- [{job['name']}]({job['url']})" if job.get("url") else f"- {job['name']}"
+            for job in mr["failed_jobs"]
         )
         parts.append(
             "### ❌ Failing pipeline\n\n"
             "The pipeline on the latest commit failed. Read each job log, fix the cause, "
             f"and push:\n\n{jobs}"
         )
-    elif mr.get("pipeline") in {"failed", "canceled"}:
+    elif mr.get("pipeline") in {"failed", "canceled"} and not mr.get("visual_review"):
+        # A Percy-only failure is left out: approving snapshots is the user's
+        # job, and asking for a code fix would send the rework chasing nothing.
         parts.append(
             f"### ❌ Failing pipeline\n\nThe pipeline on the latest commit is `{mr['pipeline']}`. "
             "Find the failing job, fix the cause, and push."
         )
 
-    if mr.get("merge_status") in {"need_rebase", "conflict"}:
+    # GitLab reports only one merge status, so an MR with both conflicts and
+    # open threads says `discussions_not_resolved`; the scan's feedback has both.
+    if {"needs rebase", "merge conflicts"} & set(mr.get("feedback") or []):
         parts.append(
             "### 🔀 Rebase\n\nThe branch can't merge as it stands. Rebase onto `master` and "
             "resolve any conflicts."
