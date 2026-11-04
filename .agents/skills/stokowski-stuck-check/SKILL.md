@@ -163,7 +163,7 @@ General rules:
 After the report, when at least one MR is `rework_eligible`, ask with the `question` tool, `multiple: true`, one option per eligible MR. This is the click: each selected MR gets a `@stokowski-native fix the following:` comment carrying its feedback, and Stokowski answers it, sends its merge review back for rework, and pushes the fix.
 
 - Label: `!<iid> <ticket key>`. Description: the feedback in priority order, e.g. "pipeline failed (lint) · 1 must-fix · 2 suggestions".
-- Post the selection: `python3 <this-skill>/scripts/request_rework.py --scan <tmp>/stuck-check.json --mr <url> [--mr <url> ...]`. It builds each comment from the scan (failed job links, rebase, the AI review's must-fix and suggestion sections verbatim, reviewer threads quoted with links) and refuses any MR not marked `rework_eligible`.
+- Post the selection: `python3 <this-skill>/scripts/request_rework.py --scan <tmp>/stuck-check.json --mr <url> [--mr <url> ...]`. It builds each comment from the scan (failed job links, rebase, the AI review's must-fix and suggestion sections verbatim, reviewer threads quoted with links) and refuses any MR not marked `rework_eligible`. Write every `--mr <url>` pair out literally or expand a shell array; zsh does not word-split a `$ARGS` string, so the script sees no `--mr` at all.
 - Report one row per MR: ticket, MR, and the posted note link, or the `why` for any skip or error.
 - A scheduled run has nobody to answer: skip the question and end the report with the eligible MRs as a table.
 - An empty selection means post nothing.
