@@ -17,6 +17,7 @@ and waiting on the merge button.
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from typing import Any
@@ -53,7 +54,11 @@ def build_comment(mr: dict[str, Any]) -> str:
     if review and not review.get("stale"):
         for key in ("must_fix_md", "suggestions_md"):
             if review.get(key):
-                parts.append(review[key])
+                # Drop the reviewer's hidden HTML markers so the posted
+                # comment is never mistaken for an AI review of its own.
+                section = re.sub(r"<!--.*?-->", "", review[key], flags=re.S).strip()
+                if section:
+                    parts.append(section)
 
     threads = (mr.get("unresolved_threads") or []) + (mr.get("comments_since_handoff") or [])
     if threads:
