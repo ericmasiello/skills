@@ -144,14 +144,37 @@ def key_lower_in(key: str, *texts: str) -> bool:
     return any(t and pattern.search(t) for t in texts)
 
 
-def load_candidates(jql: str = PROJECT_JQL, first: int = 200) -> list[Candidate]:
-    data = run_twg(["jira", "workitem", "query", "--jql", jql, "--first", str(first)])
-    issues: list[dict[str, Any]] = data["data"]["issues"]
-    if data.get("pageInfo", {}).get("hasNextPage"):
-        raise RuntimeError(
-            f"More than {first} candidates -- twg query --cursor pagination isn't "
-            "wired up here; raise --first or add cursor support before trusting this run."
-        )
+def load_candidates(jql: str = PROJECT_JQL, first: int = 200, page_size: int = 100) -> list[Candidate]:
+    """Page through `jira workitem query` with `--after <nextCursor>` until
+    `hasNextPage` is false or `first` total issues have been collected,
+    whichever comes first -- the API caps each page at 100 regardless of
+    what `--first` asks for, so a single-page fetch silently truncates any
+    board with more than 100 non-Done, non-Epic tickets.
+    """
+    issues: list[dict[str, Any]] = []
+    cursor: Optional[str] = None
+    has_next_page = True
+    while has_next_page:
+        if len(issues) >= first:
+            raise RuntimeError(
+                f"More than {first} candidates and still more pages available -- "
+                "raise --first before trusting this run."
+            )
+        args = ["jira", "workitem", "query", "--jql", jql, "--first", str(min(page_size, first - len(issues)))]
+        if cursor:
+            args += ["--after", cursor]
+        data = run_twg(args)
+        page: list[dict[str, Any]] = data["data"]["issues"]
+        issues.extend(page)
+        page_info = data.get("pageInfo", {})
+        has_next_page = bool(page_info.get("hasNextPage"))
+        if has_next_page:
+            cursor = page_info.get("nextCursor")
+            if not cursor:
+                raise RuntimeError(
+                    "twg query reported hasNextPage=true but returned no nextCursor -- "
+                    "can't continue paginating safely."
+                )
     out: list[Candidate] = []
     for i in issues:
         raw_assignee = i.get("assignee")
