@@ -386,6 +386,46 @@ def gitlab_json(path: str) -> Any:
     return parse_json(out[min(starts) :], f"glab api {path}")
 
 
+def pipeline_job_failures(
+    encoded_project: str, pipeline_id: int, fallback_url: str | None, depth: int = 0
+) -> list[dict[str, Any]]:
+    """Name the jobs behind a red pipeline when commit statuses named none.
+
+    A pipeline can read `failed` with every job green when the failure sits in a
+    bridge job's downstream child pipeline: on 2026-11-05 !13849 was `failed`
+    with 37 of 37 jobs green and no Percy status. The head commit's statuses are
+    the cheap, exact read; this is the fallback that still tells the reader which
+    job broke, one child pipeline deep. `depth` is capped so a self-referencing
+    chain cannot loop.
+    """
+    try:
+        jobs = gitlab_json(f"projects/{encoded_project}/pipelines/{pipeline_id}/jobs?per_page=100")
+    except (CommandError, OSError):
+        jobs = []
+    found = [
+        {
+            "name": job.get("name"),
+            "stage": job.get("stage"),
+            "url": job.get("web_url") or fallback_url,
+        }
+        for job in jobs or []
+        if job.get("status") in PIPELINE_BAD and not job.get("allow_failure")
+    ]
+    if found or depth >= 1:
+        return found
+    try:
+        bridges = gitlab_json(
+            f"projects/{encoded_project}/pipelines/{pipeline_id}/bridges?per_page=100"
+        )
+    except (CommandError, OSError):
+        bridges = []
+    for bridge in bridges or []:
+        downstream = (bridge.get("downstream_pipeline") or {}).get("id")
+        if bridge.get("status") in PIPELINE_BAD and downstream:
+            found.extend(pipeline_job_failures(encoded_project, downstream, fallback_url, depth + 1))
+    return found
+
+
 def mr_record(mr: dict[str, Any], source: str) -> dict[str, Any]:
     web_url = mr.get("web_url") or ""
     return {
@@ -835,6 +875,9 @@ def triage_mr(mr: dict[str, Any], me: str | None, now: datetime) -> dict[str, An
             else:
                 failed_jobs.append(entry)
 
+    if pipeline in PIPELINE_BAD and pipeline_id and not failed_jobs:
+        failed_jobs = pipeline_job_failures(encoded, pipeline_id, head_pipeline.get("web_url"))
+
     # A rework request stays pending until anything is pushed after it; until
     # then a second request would only queue a duplicate rework. Any account
     # counts here: Stokowski's rework pushes on studio MRs are attributed to
@@ -869,9 +912,15 @@ def triage_mr(mr: dict[str, Any], me: str | None, now: datetime) -> dict[str, An
 
     feedback: list[str] = []
     if failed_jobs:
-        feedback.append(f"pipeline {pipeline} ({', '.join(job['name'] for job in failed_jobs)})")
+        names = [job["name"] for job in failed_jobs]
+        shown = ", ".join(names[:4])
+        if len(names) > 4:
+            shown += f" +{len(names) - 4} more"
+        feedback.append(f"pipeline {pipeline} ({shown})")
     elif pipeline in PIPELINE_BAD and not visual_review:
-        feedback.append(f"pipeline {pipeline}")
+        # Nothing named the failure, so say that much: a bare "pipeline failed"
+        # reads as if there were a job to go and read.
+        feedback.append(f"pipeline {pipeline} (no failing job listed)")
     if merge_status in REBASE_STATUSES or detail.get("has_conflicts"):
         feedback.append("needs rebase" if merge_status == "need_rebase" else "merge conflicts")
     if ai_out and not ai_out["stale"]:
@@ -919,6 +968,30 @@ def triage_mr(mr: dict[str, Any], me: str | None, now: datetime) -> dict[str, An
     )
 
     approved = bool(approvals.get("approved"))
+    # Who was actually asked to approve, and whether they have. GitLab keeps the
+    # reviewer list and the approval list apart: a reviewer may approve without
+    # being listed (an approver from a rule), and a listed reviewer may never
+    # have looked. The report needs both halves, so the union is built here
+    # rather than inferred from `approvals_left`.
+    approved_by = [
+        (entry.get("user") or {}).get("username") for entry in approvals.get("approved_by") or []
+    ]
+    approvers: list[dict[str, Any]] = []
+    seen_approvers: set[str] = set()
+    for reviewer in detail.get("reviewers") or []:
+        username = (reviewer.get("username") or "").lstrip("@")
+        if not username or username in seen_approvers:
+            continue
+        seen_approvers.add(username)
+        approvers.append(
+            {"username": username, "name": reviewer.get("name"), "approved": username in approved_by}
+        )
+    for username in approved_by:
+        if not username or username in seen_approvers:
+            continue
+        seen_approvers.add(username)
+        approvers.append({"username": username, "name": None, "approved": True})
+
     if detail.get("draft"):
         category = "draft"
     elif approved and merge_status == "mergeable":
@@ -938,9 +1011,9 @@ def triage_mr(mr: dict[str, Any], me: str | None, now: datetime) -> dict[str, An
         "merge_status": merge_status,
         "behind_by": detail.get("diverged_commits_count"),
         "approved": approved,
-        "approved_by": [
-            (entry.get("user") or {}).get("username") for entry in approvals.get("approved_by") or []
-        ],
+        "approved_by": approved_by,
+        "approvers": approvers,
+        "approvals_required": approvals.get("approvals_required"),
         "approvals_left": approvals.get("approvals_left"),
         "head_commit_at": head_at.isoformat() if head_at else None,
         "ready_for_review_at": ready_for_review_at.isoformat() if ready_for_review_at else None,

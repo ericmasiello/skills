@@ -67,6 +67,8 @@ Rows at an audit or plan gate also carry `plan_check` and `plan_comment_at`. `pl
 
 `rework_eligible: true` marks the MRs a click can rework: draft or has feedback, the run parked at merge review, nothing new that hasn't already been asked for, and no rework running or pending. `has_new_feedback` implies something in `rework_feedback` (the feedback minus the Percy review, which no code change clears). In the Pipeline column, write a Percy-only failure as "🖼 Percy: 5 visual changes" with its link, not ❌, and put "approve in Percy" in the action cell. Approved, mergeable MRs are never eligible; merging is the user's call.
 
+`approvers` is who GitLab expects to approve, and whether they have: the MR's reviewer list unioned with `approved_by`, each entry `{username, name, approved}`, with `approvals_required` and `approvals_left` alongside. `approved` is the summary flag GitLab sets once the rules are satisfied; `approvers` is the detail behind it, and the two can disagree in the useful direction — an MR can be `approved: false` with two reviewers already holding a ✔ and one more needed.
+
 `ready_for_review_at` is when a reviewer was actually asked to look — the moment the MR came off draft, or its creation time if it was never a draft — and `review_wait_hours` is the hours since. `review_wait_long: true` once that passes `--review-wait-hours` (default 24); it is the only gate on [Waiting on a reviewer](#open-mrs).
 
 Translate `stage` into plain words in the report rather than pasting the raw value:
@@ -97,33 +99,35 @@ The MR triage replaces the old code-review list: `code_review` rows all appear h
 
 ```markdown
 ## Ready to merge
-| Ticket | MR | Approved by | Notes |
+| Ticket | MR | Approvers | Notes |
 |---|---|---|---|
-| [ERICRULEZ-390](url) universal-tools: alignment button groups | [!13913](url) | roman.dziuba | pipeline passed · approver left one suggestion (update zero coverage thresholds) |
+| [ERICRULEZ-390](url) universal-tools: alignment button groups | [!13913](url) | roman.dziuba ✔ | pipeline passed · approver left one suggestion (update zero coverage thresholds) |
 
 ## MRs with feedback
-| Ticket | MR | Pipeline | What needs doing |
-|---|---|---|---|
-| [ERICRULEZ-401](url) … | [!13919](url) | ❌ failed | fix the pipeline · 2 AI suggestions: … |
-| [ERICRULEZ-394](url) … | [!13915](url) | ✅ | 2 unresolved threads from june.eldred: [happy-dom vs …](note-url), [DIYCP-1417 note](note-url) |
+| Ticket | MR | Pipeline | Approvers | What needs doing |
+|---|---|---|---|---|
+| [ERICRULEZ-401](url) … | [!13919](url) | ❌ failed (typecheck) | s.okhotnik ✔ · june.eldred pending | fix the pipeline · 2 AI suggestions: … |
+| [ERICRULEZ-394](url) … | [!13915](url) | ✅ | vhrohan ✔ | 2 unresolved threads from june.eldred: [happy-dom vs …](note-url), [DIYCP-1417 note](note-url) |
 
 ## Drafts
 | Ticket | MR | Pipeline | Rebase | Feedback |
 |---|---|---|---|---|
-| [ERICRULEZ-369](url) … | [!13892](url) | ❌ failed | not needed | 2 AI suggestions: restore test never checks the tracking event; `clearAllMocks` reason doesn't hold |
+| [ERICRULEZ-369](url) … | [!13892](url) | ❌ failed (unit-tests 3/4) | not needed | 2 AI suggestions: restore test never checks the tracking event; `clearAllMocks` reason doesn't hold |
 
 ## Waiting on a reviewer
-| Ticket | MR | Pipeline | Waiting | Approvals |
+| Ticket | MR | Pipeline | Waiting | Approvers |
 |---|---|---|---|---|
-| [ERICRULEZ-346](url) … | [!13849](url) | ✅ | 2.1d | 1 of 2 (aarbi) |
+| [ERICRULEZ-346](url) … | [!13849](url) | ✅ | 2.1d | aarbi pending · john.gillespie pending · 1 of 2 needed |
 ```
 
+- **Every non-draft table carries `Approvers`** (drafts are not being reviewed yet). Build it from `approvers`, which is GitLab's reviewer list unioned with `approved_by`, in the MR's own order: `<username> ✔` for an approved one and `<username> pending` for one who has not, then "— nothing requested" when the list is empty. Name at most four and collapse the rest to "+N more". `approvals_required` says how many are needed, so a row can read "1 of 2 needed" without the reader counting.
+- **Any broken pipeline names its jobs.** `feedback` already carries them as `pipeline failed (typecheck)`; keep that parenthetical in the Pipeline cell — `❌ failed (typecheck)` — rather than a bare `❌ failed`. Where the scan could not name one, `feedback` says `(no failing job listed)` and the cell must too; that is different from "no job failed" and the reader needs to know which they are looking at.
 - Name the feedback, not its count: the AI finding titles and each thread's excerpt with its link, so the user can act without opening the MR. Collapse to "N more" past three per row.
 - Say whether a must-fix or a failed pipeline is the blocker; those come before suggestions in the cell.
 - A `ready_to_merge` row may still carry suggestions. Show them as notes: GitLab already permits the merge, so they are the user's call, not a blocker.
 - **If `already_requested` is true and `rework_eligible` is false, say so instead of restating the feedback as actionable**: "already requested Nov 3, still unresolved — not re-asking" beats repeating the same job name or rebase note as if it were new. These rows are never offered in [Offer reworks](#offer-reworks).
 - **Omit `## Waiting on a reviewer` entirely unless at least one `awaiting_review` MR has `review_wait_long: true`.** Nobody has looked yet is only worth a human's attention once it's sat that way for a while (24h by default); a fresh MR with no reviewer yet is not news. When the section does appear, include only the rows that qualify, not every `awaiting_review` MR.
-- `awaiting_review` MRs wait on a reviewer, not on the user; the table says so by having no action column.
+- `awaiting_review` MRs wait on a reviewer, not on the user; the table says so by having no action column — the `Approvers` cell is what shows who to nudge.
 
 ### Needs a decision or fix
 
@@ -212,6 +216,7 @@ Fallback phrasing for the `Your options` cell when the run's own summary is thin
 - **The AI reviewer rewrites its note in place.** It edits the newest note that carries `<!-- ai-code-review -->`, so `updated_at`, not `created_at`, dates a review. Because of the marker bug, it overwrote rework comments posted on 2026-11-04 on !13912 and !13919 with fresh reviews under your name. The script therefore reads a marker-bearing note as a review whoever wrote it, once the rework check has passed it by.
 - **A rework request opens a thread that nobody resolves.** Each `@stokowski-native` comment is a resolvable discussion. Once the rework lands it still blocks the merge (`discussions_not_resolved`), as on !13872 and !13919. These show up in `blocking_threads`.
 - **A red pipeline is often only Percy.** On 2026-11-04, 13 of 15 failed studio pipelines had every job and child pipeline green. The only failure was Percy's external commit status, "N visual changes need review", on MRs that only add tests. The script reads the head commit's statuses rather than the pipeline's jobs, names the real failing checks, and keeps Percy out of rework requests.
+- **"Failed" with nothing failed in it is still worth naming.** !13849 read `failed` on 2026-11-05 with 37 of 37 jobs green and no Percy status: an aggregate GitLab would not explain. The statuses read names nothing there, so the script falls back to the pipeline's own jobs and then one level into a failed bridge's downstream child pipeline, which is where a child-pipeline failure lives. Only when that also comes up empty does the row say `(no failing job listed)`, and that wording is deliberate: it is not the same claim as "no job failed".
 - **Merging an MR cancels its run.** ERICRULEZ-352 and 399 merged at 21:47Z on 2026-11-03 and their runs were cancelled at 22:06Z. A `cancelled` row whose MR merged is reported as `mr_merged_ticket_open` in `idle`, not as a decision.
 - **A push doesn't mean the thing asked for got fixed.** `rework_pending` only tracks whether *anything* was pushed since the last request, so a push that touches an unrelated file leaves the same job failing and, on the next scan, `rework_eligible` flips back to true for exactly the feedback already asked about. On 2026-11-04, four MRs (!13905, !13872, !13881, !13916) would have been re-asked to fix the same already-named failing job a second time. The script now fingerprints job names, the rebase marker, and thread URLs out of its own past `@stokowski-native` comments and only calls something `has_new_feedback` if it wasn't already named; `already_requested` marks the rest.
 - **A ready MR is not the same as a new MR.** `review_wait_hours` starts at the "marked this merge request as ready" system note, not the MR's creation time, so an MR opened as a draft weeks ago and only un-drafted an hour before the scan reports as freshly waiting, not stale.
