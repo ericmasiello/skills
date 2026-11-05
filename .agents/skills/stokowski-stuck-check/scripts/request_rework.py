@@ -27,19 +27,32 @@ THREAD_LIMIT = 1500
 
 
 def build_comment(mr: dict[str, Any]) -> str:
+    """Build the rework ask from only what the MR hasn't already been asked to fix.
+
+    Falls back to the unfiltered fields (`failed_jobs`, `unresolved_threads`)
+    when the `new_*` ones are absent, so a scan from before they existed still
+    works. Once present, using the `new_*` fields is what keeps a second
+    request from repeating a job name, rebase ask, or thread already quoted in
+    an earlier `@stokowski-native` comment that never got pushed past.
+    """
     parts = ["@stokowski-native fix the following:"]
 
-    if mr.get("failed_jobs"):
-        jobs = "\n".join(
-            f"- [{job['name']}]({job['url']})" if job.get("url") else f"- {job['name']}"
-            for job in mr["failed_jobs"]
-        )
+    failed_jobs = mr["new_failed_jobs"] if "new_failed_jobs" in mr else mr.get("failed_jobs")
+    if failed_jobs:
+        def job_line(job: dict[str, Any]) -> str:
+            label = f"[{job['name']}]({job['url']})" if job.get("url") else job["name"]
+            return f"- {label} ({job['stage']})" if job.get("stage") else f"- {label}"
+
+        jobs = "\n".join(job_line(job) for job in failed_jobs)
         parts.append(
             "### ❌ Failing pipeline\n\n"
             "The pipeline on the latest commit failed. Read each job log, fix the cause, "
             f"and push:\n\n{jobs}"
         )
-    elif mr.get("pipeline") in {"failed", "canceled"} and not mr.get("visual_review"):
+    elif (
+        mr.get("new_generic_pipeline", mr.get("pipeline") in {"failed", "canceled"})
+        and not mr.get("visual_review")
+    ):
         # A Percy-only failure is left out: approving snapshots is the user's
         # job, and asking for a code fix would send the rework chasing nothing.
         parts.append(
@@ -49,7 +62,14 @@ def build_comment(mr: dict[str, Any]) -> str:
 
     # GitLab reports only one merge status, so an MR with both conflicts and
     # open threads says `discussions_not_resolved`; the scan's feedback has both.
-    if {"needs rebase", "merge conflicts"} & set(mr.get("feedback") or []):
+    # A scan that carries `new_rebase` has already answered "is this new", so it
+    # is authoritative there; older scans fall back to the feedback list.
+    rebase_needed = (
+        mr["new_rebase"]
+        if "new_rebase" in mr
+        else bool({"needs rebase", "merge conflicts"} & set(mr.get("feedback") or []))
+    )
+    if rebase_needed:
         parts.append(
             "### 🔀 Rebase\n\nThe branch can't merge as it stands. Rebase onto `master` and "
             "resolve any conflicts."
@@ -65,7 +85,10 @@ def build_comment(mr: dict[str, Any]) -> str:
                 if section:
                     parts.append(section)
 
-    threads = (mr.get("unresolved_threads") or []) + (mr.get("comments_since_handoff") or [])
+    unresolved = mr["new_unresolved_threads"] if "new_unresolved_threads" in mr else mr.get(
+        "unresolved_threads"
+    )
+    threads = (unresolved or []) + (mr.get("comments_since_handoff") or [])
     if threads:
         lines = ["### 💬 Reviewer comments", ""]
         for thread in threads:

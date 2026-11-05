@@ -9,8 +9,8 @@ resolution -- so every scheduled run classifies identically. The invoking agent
 writes the prose report from this JSON; it never re-derives the join by hand.
 
 Usage:
-  python3 scan.py [--idle-days 3] [--stall-hours 6] [--board ERICRULEZ]
-                  [--redispatch-failed] [--max-redispatches 2]
+  python3 scan.py [--idle-days 3] [--stall-hours 6] [--review-wait-hours 24]
+                  [--board ERICRULEZ] [--redispatch-failed] [--max-redispatches 2]
 
 Read-only by default. The one write is opt-in: `--redispatch-failed` starts a
 fresh run of the same workflow on each work item whose run failed, which is
@@ -155,6 +155,17 @@ REWORK_MENTION = "@stokowski-native"
 
 # How Stokowski's GitLab bot opens its reply when it could not run a step.
 REWORK_FAILED_PREFIX = "**I couldn't finish this step.**"
+
+# The literal line request_rework.py writes when a pipeline fails with no
+# specific job to blame (e.g. the pipeline never ran because of a merge
+# conflict). Matching it lets a past rework comment fingerprint this case too,
+# the same way it fingerprints named jobs.
+GENERIC_PIPELINE_PHRASE = "find the failing job, fix the cause, and push"
+
+# The system note GitLab posts when an MR comes off draft. Its one marker for
+# when a reviewer was actually asked to look, so a 24h-old draft removal counts
+# as waiting even though the MR itself may be older.
+READY_FOR_REVIEW_PHRASE = "marked this merge request as ready"
 
 
 class CommandError(RuntimeError):
@@ -373,6 +384,46 @@ def gitlab_json(path: str) -> Any:
     if not starts:
         raise CommandError(f"glab api {path} returned no JSON: {out.strip()[:200]}")
     return parse_json(out[min(starts) :], f"glab api {path}")
+
+
+def pipeline_job_failures(
+    encoded_project: str, pipeline_id: int, fallback_url: str | None, depth: int = 0
+) -> list[dict[str, Any]]:
+    """Name the jobs behind a red pipeline when commit statuses named none.
+
+    A pipeline can read `failed` with every job green when the failure sits in a
+    bridge job's downstream child pipeline: on 2026-11-05 !13849 was `failed`
+    with 37 of 37 jobs green and no Percy status. The head commit's statuses are
+    the cheap, exact read; this is the fallback that still tells the reader which
+    job broke, one child pipeline deep. `depth` is capped so a self-referencing
+    chain cannot loop.
+    """
+    try:
+        jobs = gitlab_json(f"projects/{encoded_project}/pipelines/{pipeline_id}/jobs?per_page=100")
+    except (CommandError, OSError):
+        jobs = []
+    found = [
+        {
+            "name": job.get("name"),
+            "stage": job.get("stage"),
+            "url": job.get("web_url") or fallback_url,
+        }
+        for job in jobs or []
+        if job.get("status") in PIPELINE_BAD and not job.get("allow_failure")
+    ]
+    if found or depth >= 1:
+        return found
+    try:
+        bridges = gitlab_json(
+            f"projects/{encoded_project}/pipelines/{pipeline_id}/bridges?per_page=100"
+        )
+    except (CommandError, OSError):
+        bridges = []
+    for bridge in bridges or []:
+        downstream = (bridge.get("downstream_pipeline") or {}).get("id")
+        if bridge.get("status") in PIPELINE_BAD and downstream:
+            found.extend(pipeline_job_failures(encoded_project, downstream, fallback_url, depth + 1))
+    return found
 
 
 def mr_record(mr: dict[str, Any], source: str) -> dict[str, Any]:
@@ -613,7 +664,30 @@ def parse_ai_review(body: str) -> dict[str, Any]:
     return {"verdict": verdict, **findings, **markdown}
 
 
-def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
+def parse_rework_request(body: str) -> dict[str, Any]:
+    """Fingerprint what a past `@stokowski-native` comment already asked for.
+
+    Mirrors `request_rework.py`'s `build_comment` in reverse: job names from
+    its `[name](.../-/jobs/<id>)` links, the rebase section's marker emoji,
+    the generic "no specific job" pipeline phrase, and thread URLs from its
+    `([thread](url#note_<id>))` links. Matching on content, not timestamps,
+    is what lets a later push -- which only clears `rework_pending` -- be told
+    apart from an actual fix: if the same job name fails again, nothing new
+    was learned, and asking again would just repeat the last request.
+    """
+    return {
+        "job_names": set(re.findall(r"-\s*\[([^\]]+)\]\(https://[^)]*?/-/jobs/\d+\)", body)),
+        "rebase": "🔀" in body,
+        "generic_pipeline": GENERIC_PIPELINE_PHRASE in body.lower(),
+        # The thread link sits inside its own `[thread](url)` markdown link,
+        # itself inside a note's `(... ):` wrapper, so the match must anchor
+        # on `](` -- a bare `(` would instead capture from the wrapper's
+        # opening paren through the link's first `)`, truncating the URL.
+        "thread_urls": set(re.findall(r"\]\(([^)]+#note_\d+)\)", body)),
+    }
+
+
+def triage_mr(mr: dict[str, Any], me: str | None, now: datetime) -> dict[str, Any]:
     """Read one open MR closely enough to say what the author has to do next.
 
     Returns a record whose `category` is `draft`, `ready_to_merge`,
@@ -645,11 +719,20 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     rework_failed: dict[str, Any] | None = None
     blocking: list[dict[str, Any]] = []
     answered: list[dict[str, Any]] = []
+    ready_at: datetime | None = None
+    requested_job_names: set[str] = set()
+    requested_rebase = False
+    requested_generic_pipeline = False
+    requested_thread_urls: set[str] = set()
     for discussion in discussions or []:
         all_notes = discussion.get("notes") or []
         for note in all_notes:
             body_text = note.get("body") or ""
-            if not (note.get("system") and body_text.startswith("added ") and "commit" in body_text):
+            if not note.get("system"):
+                continue
+            if READY_FOR_REVIEW_PHRASE in body_text.lower().replace("*", ""):
+                ready_at = newest(ready_at, parse_ts(note.get("created_at")))
+            if not (body_text.startswith("added ") and "commit" in body_text):
                 continue
             pushed = parse_ts(note.get("created_at"))
             any_push_at = newest(any_push_at, pushed)
@@ -705,6 +788,11 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         # the requests read as fresh reviews and were offered again.
         if author == me and REWORK_MENTION in body:
             rework_requested_at = newest(rework_requested_at, created)
+            fingerprint = parse_rework_request(body)
+            requested_job_names |= fingerprint["job_names"]
+            requested_rebase = requested_rebase or fingerprint["rebase"]
+            requested_generic_pipeline = requested_generic_pipeline or fingerprint["generic_pipeline"]
+            requested_thread_urls |= fingerprint["thread_urls"]
             continue
         if AI_REVIEW_MARKER in body:
             # The reviewer rewrites the newest note carrying its marker in
@@ -787,6 +875,9 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
             else:
                 failed_jobs.append(entry)
 
+    if pipeline in PIPELINE_BAD and pipeline_id and not failed_jobs:
+        failed_jobs = pipeline_job_failures(encoded, pipeline_id, head_pipeline.get("web_url"))
+
     # A rework request stays pending until anything is pushed after it; until
     # then a second request would only queue a duplicate rework. Any account
     # counts here: Stokowski's rework pushes on studio MRs are attributed to
@@ -802,11 +893,34 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     else:
         rework_failed = None
 
+    # Split every live issue into "new" (never asked about) and "repeat"
+    # (a past `@stokowski-native` comment already named this exact job,
+    # rebase, or thread, and it is still unresolved). A push that clears
+    # `rework_pending` without actually fixing anything must not look like
+    # fresh ground: without this split the same failing job gets asked about
+    # on every scan the push doesn't fix it.
+    generic_pipeline_bad = pipeline in PIPELINE_BAD and not failed_jobs
+    new_failed_jobs = [job for job in failed_jobs if job.get("name") not in requested_job_names]
+    repeat_failed_jobs = [job for job in failed_jobs if job.get("name") in requested_job_names]
+    new_generic_pipeline = generic_pipeline_bad and not requested_generic_pipeline
+    repeat_generic_pipeline = generic_pipeline_bad and requested_generic_pipeline
+    rebase_needed = merge_status in REBASE_STATUSES or bool(detail.get("has_conflicts"))
+    new_rebase = rebase_needed and not requested_rebase
+    repeat_rebase = rebase_needed and requested_rebase
+    new_unresolved = [entry for entry in unresolved if entry["url"] not in requested_thread_urls]
+    repeat_unresolved = [entry for entry in unresolved if entry["url"] in requested_thread_urls]
+
     feedback: list[str] = []
     if failed_jobs:
-        feedback.append(f"pipeline {pipeline} ({', '.join(job['name'] for job in failed_jobs)})")
+        names = [job["name"] for job in failed_jobs]
+        shown = ", ".join(names[:4])
+        if len(names) > 4:
+            shown += f" +{len(names) - 4} more"
+        feedback.append(f"pipeline {pipeline} ({shown})")
     elif pipeline in PIPELINE_BAD and not visual_review:
-        feedback.append(f"pipeline {pipeline}")
+        # Nothing named the failure, so say that much: a bare "pipeline failed"
+        # reads as if there were a job to go and read.
+        feedback.append(f"pipeline {pipeline} (no failing job listed)")
     if merge_status in REBASE_STATUSES or detail.get("has_conflicts"):
         feedback.append("needs rebase" if merge_status == "need_rebase" else "merge conflicts")
     if ai_out and not ai_out["stale"]:
@@ -830,7 +944,54 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
     if answered:
         feedback.append(f"{len(answered)} answered thread(s) awaiting the reviewer")
 
+    # AI findings and `comments_since_handoff` are already deduped by
+    # `handled_at` (a past rework request counts as handoff even with no
+    # push), so only the pipeline/rebase/thread checks above need the
+    # explicit fingerprint. This is what gates a *fresh* ask, as opposed to
+    # `feedback`, which still reports every live issue so the row stays
+    # honest about what is actually broken.
+    has_new_feedback = bool(
+        new_failed_jobs
+        or new_generic_pipeline
+        or new_rebase
+        or (ai_out and not ai_out["stale"] and (ai_out["must_fix"] or ai_out["suggestions"]))
+        or new_unresolved
+        or new_comments
+    )
+    already_requested = bool(feedback) and not has_new_feedback
+
+    ready_for_review_at = ready_at or parse_ts(detail.get("created_at"))
+    review_wait_hours = (
+        round((now - ready_for_review_at).total_seconds() / 3600, 1)
+        if ready_for_review_at
+        else None
+    )
+
     approved = bool(approvals.get("approved"))
+    # Who was actually asked to approve, and whether they have. GitLab keeps the
+    # reviewer list and the approval list apart: a reviewer may approve without
+    # being listed (an approver from a rule), and a listed reviewer may never
+    # have looked. The report needs both halves, so the union is built here
+    # rather than inferred from `approvals_left`.
+    approved_by = [
+        (entry.get("user") or {}).get("username") for entry in approvals.get("approved_by") or []
+    ]
+    approvers: list[dict[str, Any]] = []
+    seen_approvers: set[str] = set()
+    for reviewer in detail.get("reviewers") or []:
+        username = (reviewer.get("username") or "").lstrip("@")
+        if not username or username in seen_approvers:
+            continue
+        seen_approvers.add(username)
+        approvers.append(
+            {"username": username, "name": reviewer.get("name"), "approved": username in approved_by}
+        )
+    for username in approved_by:
+        if not username or username in seen_approvers:
+            continue
+        seen_approvers.add(username)
+        approvers.append({"username": username, "name": None, "approved": True})
+
     if detail.get("draft"):
         category = "draft"
     elif approved and merge_status == "mergeable":
@@ -850,14 +1011,22 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         "merge_status": merge_status,
         "behind_by": detail.get("diverged_commits_count"),
         "approved": approved,
-        "approved_by": [
-            (entry.get("user") or {}).get("username") for entry in approvals.get("approved_by") or []
-        ],
+        "approved_by": approved_by,
+        "approvers": approvers,
+        "approvals_required": approvals.get("approvals_required"),
         "approvals_left": approvals.get("approvals_left"),
         "head_commit_at": head_at.isoformat() if head_at else None,
+        "ready_for_review_at": ready_for_review_at.isoformat() if ready_for_review_at else None,
+        "review_wait_hours": review_wait_hours,
         "failed_jobs": failed_jobs,
         "visual_review": visual_review,
         "rework_feedback": rework_feedback,
+        "new_failed_jobs": new_failed_jobs,
+        "repeat_failed_jobs": repeat_failed_jobs,
+        "new_generic_pipeline": new_generic_pipeline,
+        "repeat_generic_pipeline": repeat_generic_pipeline,
+        "new_rebase": new_rebase,
+        "repeat_rebase": repeat_rebase,
         "rework_requested_at": rework_requested_at.isoformat() if rework_requested_at else None,
         "rework_pending": rework_pending,
         "rework_failed": rework_failed,
@@ -865,8 +1034,12 @@ def triage_mr(mr: dict[str, Any], me: str | None) -> dict[str, Any]:
         "answered_threads": answered,
         "ai_review": ai_out,
         "unresolved_threads": unresolved,
+        "new_unresolved_threads": new_unresolved,
+        "repeat_unresolved_threads": repeat_unresolved,
         "comments_since_handoff": new_comments,
         "feedback": feedback,
+        "has_new_feedback": has_new_feedback,
+        "already_requested": already_requested,
     }
 
 
@@ -951,6 +1124,12 @@ def main() -> int:
         type=float,
         default=6.0,
         help="quiet hours before a running item counts as stalled (default 6)",
+    )
+    parser.add_argument(
+        "--review-wait-hours",
+        type=float,
+        default=24.0,
+        help="hours an MR must sit ready for review before it is worth reporting (default 24)",
     )
     parser.add_argument(
         "--no-mr-check",
@@ -1312,7 +1491,7 @@ def main() -> int:
                         continue
                     seen.add(mr["url"])
                     try:
-                        triaged = triage_mr(mr, me)
+                        triaged = triage_mr(mr, me, now)
                     except (CommandError, OSError) as exc:
                         errors.append(f"MR triage {mr['url']}: {str(exc)[:200]}")
                         continue
@@ -1323,14 +1502,26 @@ def main() -> int:
                         ticket_kind=record.get("kind"),
                         rework_running=name in {"healthy", "redispatched"},
                     )
+                    triaged["review_wait_long"] = bool(
+                        triaged["review_wait_hours"] is not None
+                        and triaged["review_wait_hours"] >= args.review_wait_hours
+                    )
                     # Offer a rework only where the comment can do something:
                     # the run is parked at its merge review (so the comment
                     # becomes a rework, not a side conversation), nothing is
-                    # already running or requested, and there is feedback.
-                    # Approved, mergeable MRs are left to the user's merge.
+                    # already running or requested, and there is feedback the
+                    # MR hasn't already been asked to fix. `has_new_feedback`
+                    # (not `feedback`) is the gate: a push that doesn't fix
+                    # anything clears `rework_pending` without teaching
+                    # Stokowski anything new, so asking again would just repeat
+                    # the last request. Approved, mergeable MRs are left to
+                    # the user's merge.
+                    # `rework_feedback` (main) excludes the Percy approval, which
+                    # no rework can clear; `has_new_feedback` is narrower still, so
+                    # it implies that check and adds "nobody has asked for this yet".
                     triaged["rework_eligible"] = bool(
                         triaged["category"] in {"draft", "has_feedback"}
-                        and triaged["rework_feedback"]
+                        and triaged["has_new_feedback"]
                         and record.get("kind") == "merge_review"
                         and not triaged["rework_running"]
                         and not triaged["rework_pending"]
@@ -1368,7 +1559,11 @@ def main() -> int:
             "mr_check_enabled": not args.no_mr_check,
             "truncated": truncated,
         },
-        "thresholds": {"idle_days": args.idle_days, "stall_hours": args.stall_hours},
+        "thresholds": {
+            "idle_days": args.idle_days,
+            "stall_hours": args.stall_hours,
+            "review_wait_hours": args.review_wait_hours,
+        },
         "counts": {
             **{name: len(records) for name, records in buckets.items()},
             "redispatched": len(redispatched),
