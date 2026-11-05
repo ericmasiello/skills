@@ -144,12 +144,17 @@ def key_lower_in(key: str, *texts: str) -> bool:
     return any(t and pattern.search(t) for t in texts)
 
 
-def load_candidates(jql: str = PROJECT_JQL, first: int = 200, page_size: int = 100) -> list[Candidate]:
+def load_candidates(jql: str = PROJECT_JQL, first: int = 500, page_size: int = 100) -> list[Candidate]:
     """Page through `jira workitem query` with `--after <nextCursor>` until
     `hasNextPage` is false or `first` total issues have been collected,
     whichever comes first -- the API caps each page at 100 regardless of
     what `--first` asks for, so a single-page fetch silently truncates any
     board with more than 100 non-Done, non-Epic tickets.
+
+    `first` defaults to 500 because the live candidate count grows: 104 in
+    late October, 137 a week later. A cap that only clears today's count
+    fails the whole run within weeks, and the error is indistinguishable
+    from a real pagination bug.
     """
     issues: list[dict[str, Any]] = []
     cursor: Optional[str] = None
@@ -616,7 +621,7 @@ def main() -> int:
     p_run = sub.add_parser("run", help="Full pipeline: query, gate, classify, apply low-risk + high-confidence moves")
     p_run.add_argument("--dry-run", action="store_true", help="Compute everything, apply nothing")
     p_run.add_argument("--since", default="365d", help="Context lookback window (default: 365d)")
-    p_run.add_argument("--first", type=int, default=200, help="Max candidates to load (default: 200)")
+    p_run.add_argument("--first", type=int, default=500, help="Max candidates to load (default: 500)")
 
     p_resolve = sub.add_parser("resolve-done", help="Record a user answer from step 6 and apply it")
     p_resolve.add_argument("--key", required=True)
