@@ -58,11 +58,7 @@
       "command": ["npx", "@vp/swancp-poc@latest"]
     },
     
-    "slack": {
-      "type": "remote",
-      "url": "https://gateway.ai-platform-sandbox.vista.io/gateways/slack/mcp",
-      "enabled": false
-    },
+    
     "servers": {
       "skylight": {
         "type": "local",
@@ -112,6 +108,11 @@
           "N8N_API_KEY": "{env:N8N_API_KEY}"
         },
         "enabled": false
+      },
+      "slack": {
+        "type": "remote",
+        "url": "https://gateway.ai-platform-sandbox.vista.io/gateways/slack/mcp",
+        "disabled": false
       }
     }
   },
@@ -141,6 +142,6 @@
     }
   },
   "plugins": [
-    "@openchamber/opencode-claude@1.4.1"
+    "@openchamber/opencode-claude@1.7.0"
   ]
 }
