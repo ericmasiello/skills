@@ -12,6 +12,12 @@ The reader is working through a large body of text, asking questions or raising 
 
 These rules apply to every response for the rest of the session, whatever the topic. Turn them off only when the reader says "stop one-at-a-time" or "normal mode"; confirm in one line, then return to your default style.
 
+## Output contract
+
+The visible reply is exactly three blocks: the label line, the response, and the footer. Nothing else.
+
+Queue state, the N and M arithmetic, drafts, self-corrections, and the silent check stay out of the reply. A reply that contains a numbered checklist, `N = ...`, two drafts, or the words "wait" or "let me re-check" is wrong. Delete that material before sending.
+
 ## The queue
 
 Every question or topic the reader raises becomes a queue item. Hold the queue in your task tool if the harness has one, otherwise in your own context. The reader sees it only when they ask ("show queue" lists the remaining items, one line each).
@@ -36,7 +42,7 @@ Each reader message is one pass:
 2. Take the head item. The reader's "next" or "continue" adds nothing to the queue and just takes the head.
 3. Get its result. If a **prefetched** result for the head item is valid, use it with no wait. Otherwise dispatch a background agent to research it and wait. All reading and searching happens in background agents; the main thread stays free of it.
 4. Dispatch a background agent for the new head of the queue (the item after the one you are answering) and do not wait for it. It runs while the reader reads and responds.
-5. **Recount** the footer from the queue as it stands now (see Reply shape).
+5. **Recount** the footer from the queue as it stands now, silently (see Reply shape).
 6. Reply in the shape below, then stop. The reader decides what comes next: follow-ups jump the queue, "next" resumes it.
 
 Each background agent starts with fresh context. Give it the question or topic, where the source text lives (path, URL, or the pasted excerpt), and the ask: respond in at most three sentences, cite the file, line, or URL each claim rests on.
@@ -75,7 +81,7 @@ Topic N of M
 
 - **Label**: `**Q:**` for a question, `**Topic:**` for a topic. The footer noun matches the label.
 - **Response**: the answer or response first, one to three sentences. A command, path, or snippet leads when the answer is one.
-- **Footer**: `Question N of M` or `Topic N of M` is the last line of every reply. Recount both numbers from the queue on every reply; a number carried over from the previous reply goes stale the moment an item is added, merged, or jumps the queue.
+- **Footer**: `Question N of M` or `Topic N of M` is the last line of every reply. Recompute both numbers from the queue silently on every reply; never show the arithmetic. A number carried over from the previous reply goes stale the moment an item is added, merged, or jumps the queue.
   - N = (items already presented) + 1, the ordinal of the item on screen.
   - M = (items already presented) + 1 + (items still queued), counted after step 1 placed this message's new items. Merges lower M; follow-ups and new items raise it.
 - **Nothing else**: the reply is the pair and the footer.
@@ -88,11 +94,6 @@ Topic N of M
 
 If an item is too ambiguous to research, reply with its label line, one short clarifying question in place of the response, and the footer. The item stays at the head, and N does not move.
 
-## Pre-send check
+## Silent check
 
-Before sending, confirm:
-
-1. The reply opens with `**Q:**` or `**Topic:**`.
-2. The last line is the footer, with N and M recounted from the queue this pass.
-3. The response is three sentences or fewer, unless the reader asked for more.
-4. The reader can tell from this reply alone what was asked and what the response is.
+Before sending, verify silently that the reply opens with the label line, ends with the footer, keeps the response to three sentences or fewer, and makes sense on its own. Never write this check, its results, or the arithmetic.
