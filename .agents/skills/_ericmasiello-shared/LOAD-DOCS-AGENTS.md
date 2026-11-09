@@ -12,7 +12,7 @@ Before deferring to the upstream skill, read whichever of these exist directly f
 
 - `docs/agents/issue-tracker.md`
 - `docs/agents/triage-labels.md` (only when the upstream skill cares about triage labels)
-- `docs/agents/domain.md`, `CONTEXT.md` or `CONTEXT-MAP.md`, `docs/adr/` (only for a wrapper around a domain-docs-reading skill)
+- `docs/agents/domain.md`, `GLOSSARY.md` or `GLOSSARY-MAP.md`, `docs/adr/` (only for a wrapper around a domain-docs-reading skill)
 
 Symlink or real file, doesn't matter — just attempt the read.
 

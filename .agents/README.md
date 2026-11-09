@@ -1,6 +1,6 @@
 # Agent Skills
 
-Eric's personal collection of agent skills, installed at `~/.agents` (see `../docs/adr/0002-*.md` for why that's a symlink into this repo's `.agents/` directory, not a checkout of its own). Skills are managed via `npx skills` — `.skill-lock.json` tracks which ones are synced from upstream sources (`mattpocock/skills`, `vercel-labs/skills`, `jeffallan/claude-skills`) versus self-authored or reconciled in from other machines. See `CONTEXT.md` for the vocabulary used to talk about that provenance.
+Eric's personal collection of agent skills, installed at `~/.agents` (see `../docs/adr/0002-*.md` for why that's a symlink into this repo's `.agents/` directory, not a checkout of its own). Skills are managed via `npx skills` — `.skill-lock.json` tracks which ones are synced from upstream sources (`mattpocock/skills`, `vercel-labs/skills`, `jeffallan/claude-skills`) versus self-authored or reconciled in from other machines. See `GLOSSARY.md` for the vocabulary used to talk about that provenance.
 
 This file is a map back to any skill by what it's for, in the spirit of [mattpocock/skills](https://github.com/mattpocock/skills)'s own README.
 
@@ -16,7 +16,7 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[grill-me](./skills/grill-me/SKILL.md)**: A relentless interview to sharpen a plan or design.
 - **[grill-with-docs](./skills/grill-with-docs/SKILL.md)**: The same interview as `grill-me`, but also creates ADRs and a glossary as you go.
 - **[grilling](./skills/grilling/SKILL.md)**: The reusable interview primitive behind `grill-me`, `grill-with-docs`, `triage`, and `wayfinder` — grills the user until every branch of the design tree is resolved.
-- **[domain-modeling](./skills/domain-modeling/SKILL.md)**: Build and sharpen a project's domain model — used when discussing terminology or editing `CONTEXT.md`/ADRs.
+- **[domain-modeling](./skills/domain-modeling/SKILL.md)**: Build and sharpen a project's domain model — used when discussing terminology or editing `GLOSSARY.md`/ADRs.
 - **[to-spec](./skills/to-spec/SKILL.md)**: Turn the current conversation into a spec and publish it to the issue tracker — no interview, just synthesis.
 - **[to-tickets](./skills/to-tickets/SKILL.md)**: Break a plan, spec, or conversation into tracer-bullet tickets with declared blocking edges.
 - **[to-tickets-ericmasiello](./skills/to-tickets-ericmasiello/SKILL.md)**: Run this instead of `to-tickets` directly on a repo that might be in `setup-ericmasiello-skills` sidecar mode — same breakdown and publishing, plus a direct `docs/agents/*.md` read first, since the sidecar skips the `AGENTS.md` pointer `to-tickets` otherwise expects. See `../docs/adr/0013-*.md`.
@@ -31,7 +31,6 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[improve-codebase-architecture](./skills/improve-codebase-architecture/SKILL.md)**: Scan a codebase for deepening opportunities, present them as an HTML report, then grill through whichever one you pick.
 - **[setup-matt-pocock-skills](./skills/setup-matt-pocock-skills/SKILL.md)**: One-time config of issue tracker, triage labels, and domain doc layout for the other engineering skills.
 - **[setup-ericmasiello-skills](./skills/setup-ericmasiello-skills/SKILL.md)**: Run this instead of `setup-matt-pocock-skills` directly — same setup, plus a sidecar-and-symlink mode for repos where the root file or `docs/` is restricted. See `../docs/adr/0006-*.md`. Ships with `relink.sh` to recreate those symlinks in any new worktree or clone — see the root [`README.md`](../README.md#restricted-repos--worktrees).
-- **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)**: Resolve an in-progress git merge/rebase conflict.
 
 ## Principles
 

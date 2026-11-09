@@ -65,12 +65,12 @@ mkdir -p "$target/docs"
 [[ -d "$sidecar/agents" ]] && link "$target/docs/agents" "$sidecar/agents"
 [[ -d "$sidecar/adr" ]] && link "$target/docs/adr" "$sidecar/adr"
 
-# Domain docs are either single-context (CONTEXT.md) or multi-context
-# (CONTEXT-MAP.md) — link whichever the sidecar actually has.
-if [[ -f "$sidecar/CONTEXT-MAP.md" ]]; then
-  link "$target/CONTEXT-MAP.md" "$sidecar/CONTEXT-MAP.md"
-elif [[ -f "$sidecar/CONTEXT.md" ]]; then
-  link "$target/CONTEXT.md" "$sidecar/CONTEXT.md"
+# Domain docs are either single-context (GLOSSARY.md) or multi-context
+# (GLOSSARY-MAP.md) — link whichever the sidecar actually has.
+if [[ -f "$sidecar/GLOSSARY-MAP.md" ]]; then
+  link "$target/GLOSSARY-MAP.md" "$sidecar/GLOSSARY-MAP.md"
+elif [[ -f "$sidecar/GLOSSARY.md" ]]; then
+  link "$target/GLOSSARY.md" "$sidecar/GLOSSARY.md"
 fi
 
 # .git/info/exclude lives in the *common* git dir, so this is shared across
@@ -81,10 +81,10 @@ exclude_file="$(git -C "$target" rev-parse --git-common-dir)/info/exclude"
 mkdir -p "$(dirname "$exclude_file")"
 touch "$exclude_file"
 
-for path in /docs/agents /docs/adr /CONTEXT-MAP.md /CONTEXT.md; do
+for path in /docs/agents /docs/adr /GLOSSARY-MAP.md /GLOSSARY.md; do
   case "$path" in
-    /CONTEXT-MAP.md) [[ -f "$sidecar/CONTEXT-MAP.md" ]] || continue ;;
-    /CONTEXT.md) [[ -f "$sidecar/CONTEXT.md" ]] || continue ;;
+    /GLOSSARY-MAP.md) [[ -f "$sidecar/GLOSSARY-MAP.md" ]] || continue ;;
+    /GLOSSARY.md) [[ -f "$sidecar/GLOSSARY.md" ]] || continue ;;
   esac
   grep -qxF "$path" "$exclude_file" 2>/dev/null && continue
   echo "$path" >> "$exclude_file"
