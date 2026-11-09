@@ -19,3 +19,5 @@ Follow [`../_ericmasiello-shared/LOAD-DOCS-AGENTS.md`](../_ericmasiello-shared/L
 ### 2. Defer to to-tickets
 
 Read `.agents/skills/to-tickets/SKILL.md` and follow its process (Gather context → Explore the codebase → Draft vertical slices → Quiz the user → Publish) exactly as written, unmodified — treating whatever step 1 found as the tracker/label context it says "should have been provided to you."
+
+When the tracker is Jira and you publish with the `twg` CLI, follow `vista-atlassian`'s Markdown-format flag rules (`--description-format markdown` on `twg jira workitem create` / `update`) so headings and task lists compile into native ADF nodes.
