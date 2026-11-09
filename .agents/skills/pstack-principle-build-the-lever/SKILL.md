@@ -23,4 +23,4 @@ When the work isn't trivial, build the tool that does it instead of doing it by 
 Distinct from Encode Lessons in Structure, which makes a recurring instruction a durable guardrail. This is throughput and reviewability on the work in front of you. For scripting the verification itself, see Prove It Works.
 
 ---
-Sourced from `cursor/plugins/pstack/skills/principle-build-the-lever`. Cross-references `principle-laziness-protocol`, `principle-encode-lessons-in-structure`, and `principle-prove-it-works` as related (not required) principles. All three are installed alongside this one.
+Sourced from `cursor/plugins/pstack/skills/principle-build-the-lever`. Cross-references `principle-encode-lessons-in-structure` and `principle-prove-it-works` as related (not required) principles. Both are installed alongside this one.

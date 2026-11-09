@@ -46,20 +46,13 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[pstack-principle-exhaust-the-design-space](./skills/pstack-principle-exhaust-the-design-space/SKILL.md)**: Build 2-3 competing prototypes for a novel UI/architecture decision before committing.
 - **[pstack-principle-experience-first](./skills/pstack-principle-experience-first/SKILL.md)**: Choose user delight over implementation convenience; ship fewer polished features over more rough ones.
 - **[pstack-principle-fix-root-causes](./skills/pstack-principle-fix-root-causes/SKILL.md)**: Trace each symptom to its root cause and fix it there, rather than guarding around a crash.
-- **[pstack-principle-foundational-thinking](./skills/pstack-principle-foundational-thinking/SKILL.md)**: Get the core data structures right before writing logic, so downstream code becomes obvious.
 - **[pstack-principle-guard-the-context-window](./skills/pstack-principle-guard-the-context-window/SKILL.md)**: Route bulk reading/output to subagents; keep summaries in the main thread, not raw payloads.
-- **[pstack-principle-laziness-protocol](./skills/pstack-principle-laziness-protocol/SKILL.md)**: Bias toward deletion and the smallest change that solves the problem.
 - **[pstack-principle-make-operations-idempotent](./skills/pstack-principle-make-operations-idempotent/SKILL.md)**: Design operations to converge to the same end state regardless of partial prior runs.
-- **[pstack-principle-migrate-callers-then-delete-legacy-apis](./skills/pstack-principle-migrate-callers-then-delete-legacy-apis/SKILL.md)**: Migrate callers and delete the old API in the same wave — don't preserve compatibility layers.
 - **[pstack-principle-minimize-reader-load](./skills/pstack-principle-minimize-reader-load/SKILL.md)**: Collapse one-caller wrappers and shrink mutable/hidden state so code is easier to trace.
 - **[pstack-principle-model-the-domain](./skills/pstack-principle-model-the-domain/SKILL.md)**: Encode the domain in a structure instead of scattered conditionals when logic branches a lot.
-- **[pstack-principle-never-block-on-the-human](./skills/pstack-principle-never-block-on-the-human/SKILL.md)**: Proceed on reversible work and let the human course-correct after; save confirmation for irreversible actions.
-- **[pstack-principle-outcome-oriented-execution](./skills/pstack-principle-outcome-oriented-execution/SKILL.md)**: Converge directly on the target architecture during planned rewrites; don't preserve throwaway compatibility code.
 - **[pstack-principle-prove-it-works](./skills/pstack-principle-prove-it-works/SKILL.md)**: Verify against the real artifact before declaring done, not a proxy or "it compiles."
-- **[pstack-principle-redesign-from-first-principles](./skills/pstack-principle-redesign-from-first-principles/SKILL.md)**: Redesign as if a new requirement had been foundational from day one, instead of bolting it on.
 - **[pstack-principle-separate-before-serializing-shared-state](./skills/pstack-principle-separate-before-serializing-shared-state/SKILL.md)**: Eliminate sharing between concurrent writers first; only serialize when one shared writer is a real invariant.
 - **[pstack-principle-sequence-verifiable-units](./skills/pstack-principle-sequence-verifiable-units/SKILL.md)**: Break multi-step work into small units that each end in a verifiable state, checked before the next.
-- **[pstack-principle-subtract-before-you-add](./skills/pstack-principle-subtract-before-you-add/SKILL.md)**: Remove dead weight and redundant code first, then build on the simpler base.
 - **[pstack-principle-type-system-discipline](./skills/pstack-principle-type-system-discipline/SKILL.md)**: Make illegal states unrepresentable and parse external data at boundaries when designing types.
 
 ## Code Quality & Review
@@ -76,8 +69,6 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[writing-code-comments](./skills/writing-code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function. Named to match Studio's own project-scoped skill of the same name, so that one takes precedence there — see `../docs/adr/0011-*.md`.
 - **[wizard](./skills/wizard/SKILL.md)**: Generate an interactive bash wizard for steps only a human can perform (credentials, dashboards, provisioning).
 - **[thermo-nuclear-review](./skills/thermo-nuclear-review/SKILL.md)**: Comprehensive security and correctness audit of a branch's changes.
-- **[thermo-nuclear-code-quality-review](./skills/thermo-nuclear-code-quality-review/SKILL.md)**: Extremely strict maintainability review for abstraction quality and giant files.
-- **[pstack-blast-radius](./skills/pstack-blast-radius/SKILL.md)**: Find what a change could break elsewhere before it ships, proven by running real code.
 - **[pstack-why](./skills/pstack-why/SKILL.md)**: A cited read on design rationale and tradeoffs — queries source control, issue tracker, docs, chat, and observability in parallel.
 
 ## Productivity & Docs
@@ -109,7 +100,6 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 - **[stokowski-cli](./skills/stokowski-cli/SKILL.md)**: Dispatch work to Stokowski's agent workflows via the `stok` CLI, then follow or act on it live — decide gates, send signals, add input, cancel.
 - **[stokowski-stuck-check](./skills/stokowski-stuck-check/SKILL.md)**: Find testing-uplift work Stokowski has parked on a human across ERICRULEZ and DEX — escalations, failed/cancelled runs, and items that stopped moving — with merge requests awaiting code review reported separately from work that needs a decision. Read-only, built to run on an OpenChamber schedule; see the root [`README.md`](../README.md#scheduled-tasks) setup prompt.
 - **[studio-improve-codebase-architecture](./skills/studio-improve-codebase-architecture/SKILL.md)**: Parallel architecture review of the Studio monorepo — batched sub-agents per package, HTML report, grilling loop.
-- **[studio-integration-testing](./skills/studio-integration-testing/SKILL.md)**: Integration tests for hooks/components that depend on DesignEngine, providers, and complex runtime state.
 - **[studio-migrate-to-jira](./skills/studio-migrate-to-jira/SKILL.md)**: Migrate GitLab work items from the Studio project into Jira Workstreams/Tasks.
 - **[studio-rebase](./skills/studio-rebase/SKILL.md)**: Fetch and rebase onto a target branch, then resolve all merge conflicts.
 - **[studio-rewrite-human-facing-text](./skills/studio-rewrite-human-facing-text/SKILL.md)**: Audit and rewrite code comments, commented-on code, ADRs, and READMEs touched in a branch or MR using `writing-code-comments` and `unslop`.
