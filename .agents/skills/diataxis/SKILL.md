@@ -2,6 +2,7 @@
 name: diataxis
 description: Classify, validate, generate, and audit documentation using the Diátaxis framework. Enforces quadrant purity across tutorials, how-to guides, reference, and explanation. Use when creating documentation, reviewing docs, auditing doc sets, restructuring existing content, or when the user mentions Diátaxis, documentation structure, or doc quality.
 license: CC-BY-SA-4.0
+disable-model-invocation: true
 ---
 
 # Diátaxis Documentation Governance

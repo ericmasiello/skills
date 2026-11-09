@@ -1,6 +1,6 @@
 # ericmasiello-skills
 
-Eric's personal agent skills collection and Opencode runtime configuration. The folders are symlinked into `~/.agents`, `~/.claude/skills` and `~/.config/opencode`. See `CONTEXT.md` for the vocabulary this repo uses (Legacy / Needs-review / Work-context / External-only / User-scope / Companion agent) and `docs/adr/` for why it's laid out this way.
+Eric's personal agent skills collection and Opencode runtime configuration. The folders are symlinked into `~/.agents`, `~/.claude/skills` and `~/.config/opencode`. See `GLOSSARY.md` for the vocabulary this repo uses (Legacy / Needs-review / Work-context / External-only / User-scope / Companion agent) and `docs/adr/` for why it's laid out this way.
 
 ## Layout
 
@@ -18,7 +18,7 @@ Eric's personal agent skills collection and Opencode runtime configuration. The 
 ├── docs/
 │   ├── adr/             # architecture decision records for this repo
 │   └── agents/          # how skills should use this repo's issue tracker, labels, domain docs
-├── CONTEXT.md           # glossary for this repo's own domain
+├── GLOSSARY.md           # glossary for this repo's own domain
 ├── AGENTS.md            # pointers agents read before acting in this repo
 └── setup.sh             # idempotent installer — symlinks .agents/, Claude Code skills and opencode/ into place
 ```
@@ -101,4 +101,4 @@ Start at [`.agents/README.md`](.agents/README.md) — a full catalog grouped by 
 
 ## Contributing to this repo
 
-Issues and specs live in GitHub Issues on this repo (`gh` CLI) — see `docs/agents/issue-tracker.md`. Triage uses a five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — see `docs/agents/triage-labels.md`. Domain decisions go in `CONTEXT.md` and `docs/adr/` — see `docs/agents/domain.md`. Changes ship on a branch and go through a PR, never directly on `main` — one branch per task, not per skill — see `docs/agents/branching.md`.
+Issues and specs live in GitHub Issues on this repo (`gh` CLI) — see `docs/agents/issue-tracker.md`. Triage uses a five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — see `docs/agents/triage-labels.md`. Domain decisions go in `GLOSSARY.md` and `docs/adr/` — see `docs/agents/domain.md`. Changes ship on a branch and go through a PR, never directly on `main` — one branch per task, not per skill — see `docs/agents/branching.md`.

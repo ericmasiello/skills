@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Setup (ericmasiello wrapper)
 
-`setup-matt-pocock-skills` assumes it can freely edit `AGENTS.md`/`CLAUDE.md` and create `docs/agents/`, `CONTEXT.md`, `docs/adr/` inside the repo it's run in. Some repos don't allow that — shared, CODEOWNERS-gated monorepos where coworkers don't use these skills and wouldn't want personal tooling config landing in their tree, even as an untracked file.
+`setup-matt-pocock-skills` assumes it can freely edit `AGENTS.md`/`CLAUDE.md` and create `docs/agents/`, `GLOSSARY.md`, `docs/adr/` inside the repo it's run in. Some repos don't allow that — shared, CODEOWNERS-gated monorepos where coworkers don't use these skills and wouldn't want personal tooling config landing in their tree, even as an untracked file.
 
 This skill doesn't reimplement `setup-matt-pocock-skills` — it's a decorator, in the same spirit as `grill-with-docs` (which is just "call `grilling`, then `domain-modeling`"). `setup-matt-pocock-skills` is synced from `mattpocock/skills` (see `.agents/.skill-lock.json`) and gets overwritten by `npx skills update`; editing it directly would silently lose that update path. This wrapper stays self-authored and untouched by that sync, and defers to the upstream skill's own logic for everything except where the files physically go.
 
@@ -32,7 +32,7 @@ b. **Resolve this repo's real location.** Run `realpath ~/.agents` — never har
 c. **Create the sidecar if it doesn't exist**, at `<resolved-.agents>/_config/projects/<key>/`:
    - `agents/` (empty directory)
    - `adr/` (empty directory)
-   - `CONTEXT.md` (empty file)
+   - `GLOSSARY.md` (empty file)
    - `project.json`:
      ```json
      {
@@ -50,18 +50,24 @@ d. **Create the symlinks in the target repo, and register them as local-only.** 
    ```
    ./relink.sh <target-checkout-path>
    ```
-   It derives `<key>` the same way as step 2a, creates `docs/agents` → `<sidecar>/agents`, `docs/adr` → `<sidecar>/adr`, and the root context doc (`CONTEXT.md` or `CONTEXT-MAP.md`, whichever the sidecar has) → its sidecar counterpart, then appends the matching paths to `.git/info/exclude` (never `.gitignore` — this must never touch a tracked file) if not already present. It's idempotent: existing correct symlinks and exclude entries are left alone; if a destination already exists as a *real* file/directory with content, it stops and reports the conflict instead of overwriting.
+   It derives `<key>` the same way as step 2a, creates `docs/agents` → `<sidecar>/agents`, `docs/adr` → `<sidecar>/adr`, and the root context doc (`GLOSSARY.md` or `GLOSSARY-MAP.md`, whichever the sidecar has) → its sidecar counterpart, then appends the matching paths to `.git/info/exclude` (never `.gitignore` — this must never touch a tracked file) if not already present. It's idempotent: existing correct symlinks and exclude entries are left alone; if a destination already exists as a *real* file/directory with content, it stops and reports the conflict instead of overwriting.
 
    **Every new worktree or clone of an already-set-up repo needs its own run of this script** — the symlinks are local, untracked filesystem state that doesn't propagate the way `.git/info/exclude` does (that lives in the shared common `.git` dir, so it only needs setting once per repo). Re-run `relink.sh <path>` against any new worktree before expecting `docs/agents`, `docs/adr`, or the root context doc to resolve there.
 
-f. Tell the user exactly what was created and where, and that none of it is tracked, committed, or visible to `git status`, teammates, or CODEOWNERS review.
+f. Tell the user exactly what was created and where, and that none of the sidecar itself is tracked, committed, or visible to `git status`, teammates, or CODEOWNERS review. (Triage labels created on the remote tracker are the one thing teammates can see, which is why step 3 asks first.)
 
 ### 3. Defer to setup-matt-pocock-skills
 
-Read `.agents/skills/setup-matt-pocock-skills/SKILL.md` and follow its process (Explore → Present findings and ask → Confirm and edit → Write → Done) exactly as written, with exactly one exception:
+Read `.agents/skills/setup-matt-pocock-skills/SKILL.md` and follow its process (Explore → Present findings and ask → Confirm and edit → Write → Done) as written, with the changes below. When step 1 answered "yes," upstream's writes reach outside the sidecar in four places, so each is skipped or redirected here.
 
-**Skip its step 4 instruction to write the `## Agent skills` block into `AGENTS.md`/`CLAUDE.md`, entirely, when step 1 above answered "yes."** That block only ever summarizes and points at `docs/agents/*.md` — no consuming skill reads it (only `setup-matt-pocock-skills` itself writes it); it exists purely for a human or fresh agent session skimming the repo root. Skipping it costs nothing functional.
+**1. Skip the `## Agent skills` block, entirely.** Don't draft or show it in its step 3, and don't write it into `AGENTS.md`/`CLAUDE.md` in its step 4. That block only ever summarizes and points at `docs/agents/*.md`; no consuming skill reads it (only `setup-matt-pocock-skills` itself writes it). It exists purely for a human or fresh agent session skimming the repo root, so skipping it costs nothing functional.
 
-Every other write in its step 4 — `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, `docs/agents/triage-labels.md` — proceeds completely unmodified. Because of the step 2d symlinks, those writes land in the sidecar transparently. The `CONTEXT.md`/`docs/adr/` symlinks exist for the skills that write there later (`domain-modeling` and friends, not `setup-matt-pocock-skills` itself), and every downstream skill (`code-review`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `wayfinder`) keeps reading the same relative paths it always has, with zero changes to any of them.
+**2. Decline its legacy `CONTEXT.md` / `CONTEXT-MAP.md` offer.** Exploration offers to `git mv` a legacy file to its `GLOSSARY` name. In a restricted repo that edits a tracked file, and it leaves a real `GLOSSARY.md` where `relink.sh` wants a symlink. Answer no. If the repo has a legacy file, copy its content into the sidecar `GLOSSARY.md` or `GLOSSARY-MAP.md` instead, and expect `relink.sh` to report a conflict until the tracked file is out of the way.
+
+**3. Don't let it create a git remote.** Upstream may run `git init` / `git remote add origin` when none exists. Step 2a derives `<key>` from the remote, so a remote added afterwards changes the key and orphans the sidecar. A restricted repo is expected to have its remote already. If it has none, stop and tell the user rather than let upstream add one.
+
+**4. Confirm before it creates triage labels.** When the user keeps the default labels, upstream runs `gh label create` / `glab label create` for any the tracker lacks. That writes to the shared remote tracker, so coworkers see the labels. Ask the user first. If they decline, skip label creation and still write `docs/agents/triage-labels.md`.
+
+Everything else in its step 4 (`docs/agents/issue-tracker.md`, `docs/agents/domain.md`, `docs/agents/triage-labels.md`) proceeds unmodified. Because of the step 2d symlinks, those writes land in the sidecar transparently. The `GLOSSARY.md`/`docs/adr/` symlinks exist for the skills that write there later (`domain-modeling` and friends, not `setup-matt-pocock-skills` itself), and every downstream skill (`code-review`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `wayfinder`) keeps reading the same relative paths it always has, with zero changes to any of them.
 
 When step 1 answered "no," step 3 is just: run `setup-matt-pocock-skills` unmodified, in full.

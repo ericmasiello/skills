@@ -15,7 +15,7 @@ This is a monorepo-scaled specialization of `/improve-codebase-architecture`: sa
 
 Call the Skill tool with "codebase-design" for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion.
 
-Informed by the project's domain model (`CONTEXT.md`) and recorded decisions (`docs/adr/`).
+Informed by the project's domain model (`GLOSSARY.md`) and recorded decisions (`docs/adr/`).
 
 ## Process
 
@@ -24,7 +24,7 @@ Informed by the project's domain model (`CONTEXT.md`) and recorded decisions (`d
 Read ONLY high-level orientation files:
 
 - Top-level directory listing (2 levels deep max)
-- `CONTEXT.md`, `AGENTS.md`, or equivalent domain glossary
+- `GLOSSARY.md`, `AGENTS.md`, or equivalent domain glossary
 - ADRs in `docs/adr/` relevant to the user's area of interest
 - Build/config files (`package.json`, `tsconfig.json`) for dependency signals
 
@@ -92,7 +92,7 @@ Once the user picks a candidate, call the Skill tool with "grilling" to walk the
 
 Side effects happen inline as decisions crystallize; call the Skill tool with "domain-modeling" to keep the domain model current as you go:
 
-- **New concept not in `CONTEXT.md`?** Add it. Create the file lazily if needed.
-- **Sharpening a fuzzy term?** Update `CONTEXT.md` right there.
+- **New concept not in `GLOSSARY.md`?** Add it. Create the file lazily if needed.
+- **Sharpening a fuzzy term?** Update `GLOSSARY.md` right there.
 - **User rejects with a load-bearing reason?** Offer an ADR: _"Want me to record this so future reviews don't re-suggest it?"_ Only when the reason would actually prevent re-suggestion. See [domain-modeling/ADR-FORMAT.md](../domain-modeling/ADR-FORMAT.md).
 - **Exploring alternative interfaces?** Call the Skill tool with "codebase-design" and use its [DESIGN-IT-TWICE.md](../codebase-design/DESIGN-IT-TWICE.md) parallel sub-agent pattern.

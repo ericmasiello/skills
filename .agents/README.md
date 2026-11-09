@@ -1,6 +1,6 @@
 # Agent Skills
 
-Eric's personal collection of agent skills, installed at `~/.agents` (see `../docs/adr/0002-*.md` for why that's a symlink into this repo's `.agents/` directory, not a checkout of its own). Skills are managed via `npx skills` — `.skill-lock.json` tracks which ones are synced from upstream sources (`mattpocock/skills`, `vercel-labs/skills`, `jeffallan/claude-skills`) versus self-authored or reconciled in from other machines. See `CONTEXT.md` for the vocabulary used to talk about that provenance.
+Eric's personal collection of agent skills, installed at `~/.agents` (see `../docs/adr/0002-*.md` for why that's a symlink into this repo's `.agents/` directory, not a checkout of its own). Skills are managed via `npx skills` — `.skill-lock.json` tracks which ones are synced from upstream sources (`mattpocock/skills`, `vercel-labs/skills`, `jeffallan/claude-skills`) versus self-authored or reconciled in from other machines. See `GLOSSARY.md` for the vocabulary used to talk about that provenance.
 
 This file is a map back to any skill by what it's for, in the spirit of [mattpocock/skills](https://github.com/mattpocock/skills)'s own README.
 
@@ -16,22 +16,25 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[grill-me](./skills/grill-me/SKILL.md)**: A relentless interview to sharpen a plan or design.
 - **[grill-with-docs](./skills/grill-with-docs/SKILL.md)**: The same interview as `grill-me`, but also creates ADRs and a glossary as you go.
 - **[grilling](./skills/grilling/SKILL.md)**: The reusable interview primitive behind `grill-me`, `grill-with-docs`, `triage`, and `wayfinder` — grills the user until every branch of the design tree is resolved.
-- **[domain-modeling](./skills/domain-modeling/SKILL.md)**: Build and sharpen a project's domain model — used when discussing terminology or editing `CONTEXT.md`/ADRs.
+- **[domain-modeling](./skills/domain-modeling/SKILL.md)**: Build and sharpen a project's domain model — used when discussing terminology or editing `GLOSSARY.md`/ADRs.
 - **[to-spec](./skills/to-spec/SKILL.md)**: Turn the current conversation into a spec and publish it to the issue tracker — no interview, just synthesis.
 - **[to-tickets](./skills/to-tickets/SKILL.md)**: Break a plan, spec, or conversation into tracer-bullet tickets with declared blocking edges.
 - **[to-tickets-ericmasiello](./skills/to-tickets-ericmasiello/SKILL.md)**: Run this instead of `to-tickets` directly on a repo that might be in `setup-ericmasiello-skills` sidecar mode — same breakdown and publishing, plus a direct `docs/agents/*.md` read first, since the sidecar skips the `AGENTS.md` pointer `to-tickets` otherwise expects. See `../docs/adr/0013-*.md`.
 - **[wayfinder](./skills/wayfinder/SKILL.md)**: Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
+- **[software-factory](./skills/software-factory/SKILL.md)**: Shared vocabulary for designing a software factory: the tasks it runs and the services it plugs into (runners, git hosts, ticket trackers, observability). Upstream in-progress.
 - **[implement](./skills/implement/SKILL.md)**: Implement a piece of work based on a spec or set of tickets.
+- **[implement-spec](./skills/implement-spec/SKILL.md)**: Implement a whole spec and its tickets in one run: reads the tickets as a task graph, runs implementer subagents across the ready frontier in parallel, and lands everything on one integration branch.
 - **[split-mr](./skills/split-mr/SKILL.md)**: Decide whether a branch's diff should ship as a stack of small, single-concern MRs, a set of parallel ones, or stay as one — then build the chosen split.
 - **[write-pr-description](./skills/write-pr-description/SKILL.md)**: Compose or update a PR/MR title and description, honoring any repo-defined template — fires on creating a PR/MR, pushing to a branch that already has one open, or an explicit ask. Used by `studio-ship-work` as its description-composing step.
+- **[pr](./skills/pr/SKILL.md)**: Model-invoked whenever the agent writes a PR body: the smallest visual that shows the change, before/after evidence, and a one-way or two-way door call. Overlaps `write-pr-description`, `architectural-sketch` and `visual-recap`.
 - **[architectural-sketch](./skills/architectural-sketch/SKILL.md)**: Describe architectural changes, structural modifications, or implementation phases using before/after code diagrams and structural sketches.
 - **[code-review](./skills/code-review/SKILL.md)**: Two-axis review (Standards + Spec) of the changes since a fixed point, run as parallel sub-agents.
+- **[retro](./skills/retro/SKILL.md)**: Look back over a coding session and suggest changes to the agent's environment (checks, coding standards, steering files, tooling) rather than the code.
 - **[address-pr-feedback](./skills/address-pr-feedback/SKILL.md)**: Triage PR/MR review comments one at a time, reply, resolve, implement changes, and close out threads.
 - **[triage](./skills/triage/SKILL.md)**: Move issues and external PRs through a state machine of triage roles, categorize, verify, and write agent-ready briefs.
 - **[improve-codebase-architecture](./skills/improve-codebase-architecture/SKILL.md)**: Scan a codebase for deepening opportunities, present them as an HTML report, then grill through whichever one you pick.
 - **[setup-matt-pocock-skills](./skills/setup-matt-pocock-skills/SKILL.md)**: One-time config of issue tracker, triage labels, and domain doc layout for the other engineering skills.
 - **[setup-ericmasiello-skills](./skills/setup-ericmasiello-skills/SKILL.md)**: Run this instead of `setup-matt-pocock-skills` directly — same setup, plus a sidecar-and-symlink mode for repos where the root file or `docs/` is restricted. See `../docs/adr/0006-*.md`. Ships with `relink.sh` to recreate those symlinks in any new worktree or clone — see the root [`README.md`](../README.md#restricted-repos--worktrees).
-- **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)**: Resolve an in-progress git merge/rebase conflict.
 
 ## Principles
 
@@ -43,26 +46,20 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[pstack-principle-exhaust-the-design-space](./skills/pstack-principle-exhaust-the-design-space/SKILL.md)**: Build 2-3 competing prototypes for a novel UI/architecture decision before committing.
 - **[pstack-principle-experience-first](./skills/pstack-principle-experience-first/SKILL.md)**: Choose user delight over implementation convenience; ship fewer polished features over more rough ones.
 - **[pstack-principle-fix-root-causes](./skills/pstack-principle-fix-root-causes/SKILL.md)**: Trace each symptom to its root cause and fix it there, rather than guarding around a crash.
-- **[pstack-principle-foundational-thinking](./skills/pstack-principle-foundational-thinking/SKILL.md)**: Get the core data structures right before writing logic, so downstream code becomes obvious.
 - **[pstack-principle-guard-the-context-window](./skills/pstack-principle-guard-the-context-window/SKILL.md)**: Route bulk reading/output to subagents; keep summaries in the main thread, not raw payloads.
-- **[pstack-principle-laziness-protocol](./skills/pstack-principle-laziness-protocol/SKILL.md)**: Bias toward deletion and the smallest change that solves the problem.
 - **[pstack-principle-make-operations-idempotent](./skills/pstack-principle-make-operations-idempotent/SKILL.md)**: Design operations to converge to the same end state regardless of partial prior runs.
-- **[pstack-principle-migrate-callers-then-delete-legacy-apis](./skills/pstack-principle-migrate-callers-then-delete-legacy-apis/SKILL.md)**: Migrate callers and delete the old API in the same wave — don't preserve compatibility layers.
 - **[pstack-principle-minimize-reader-load](./skills/pstack-principle-minimize-reader-load/SKILL.md)**: Collapse one-caller wrappers and shrink mutable/hidden state so code is easier to trace.
 - **[pstack-principle-model-the-domain](./skills/pstack-principle-model-the-domain/SKILL.md)**: Encode the domain in a structure instead of scattered conditionals when logic branches a lot.
-- **[pstack-principle-never-block-on-the-human](./skills/pstack-principle-never-block-on-the-human/SKILL.md)**: Proceed on reversible work and let the human course-correct after; save confirmation for irreversible actions.
-- **[pstack-principle-outcome-oriented-execution](./skills/pstack-principle-outcome-oriented-execution/SKILL.md)**: Converge directly on the target architecture during planned rewrites; don't preserve throwaway compatibility code.
 - **[pstack-principle-prove-it-works](./skills/pstack-principle-prove-it-works/SKILL.md)**: Verify against the real artifact before declaring done, not a proxy or "it compiles."
-- **[pstack-principle-redesign-from-first-principles](./skills/pstack-principle-redesign-from-first-principles/SKILL.md)**: Redesign as if a new requirement had been foundational from day one, instead of bolting it on.
 - **[pstack-principle-separate-before-serializing-shared-state](./skills/pstack-principle-separate-before-serializing-shared-state/SKILL.md)**: Eliminate sharing between concurrent writers first; only serialize when one shared writer is a real invariant.
 - **[pstack-principle-sequence-verifiable-units](./skills/pstack-principle-sequence-verifiable-units/SKILL.md)**: Break multi-step work into small units that each end in a verifiable state, checked before the next.
-- **[pstack-principle-subtract-before-you-add](./skills/pstack-principle-subtract-before-you-add/SKILL.md)**: Remove dead weight and redundant code first, then build on the simpler base.
 - **[pstack-principle-type-system-discipline](./skills/pstack-principle-type-system-discipline/SKILL.md)**: Make illegal states unrepresentable and parse external data at boundaries when designing types.
 
 ## Code Quality & Review
 
 - **[codebase-design](./skills/codebase-design/SKILL.md)**: Shared vocabulary for designing deep modules — interfaces, seams, testability.
 - **[tdd](./skills/tdd/SKILL.md)**: Test-driven development with a red-green-refactor loop.
+- **[setup-ts-deep-modules](./skills/setup-ts-deep-modules/SKILL.md)**: Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders behind entry-point files. Upstream in-progress; user-invoked.
 - **[prototype](./skills/prototype/SKILL.md)**: Build a throwaway prototype to answer a design question (state/logic or UI variations).
 - **[diagnosing-bugs](./skills/diagnosing-bugs/SKILL.md)**: Disciplined diagnosis loop for hard bugs and performance regressions.
 - **[node-version-mismatch](./skills/node-version-mismatch/SKILL.md)**: Fix a Node engine/version error (`EBADDEVENGINES`, etc.) by running `nvm install` against the repo's `.nvmrc`, instead of guessing or editing the requirement.
@@ -72,8 +69,6 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[writing-code-comments](./skills/writing-code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function. Named to match Studio's own project-scoped skill of the same name, so that one takes precedence there — see `../docs/adr/0011-*.md`.
 - **[wizard](./skills/wizard/SKILL.md)**: Generate an interactive bash wizard for steps only a human can perform (credentials, dashboards, provisioning).
 - **[thermo-nuclear-review](./skills/thermo-nuclear-review/SKILL.md)**: Comprehensive security and correctness audit of a branch's changes.
-- **[thermo-nuclear-code-quality-review](./skills/thermo-nuclear-code-quality-review/SKILL.md)**: Extremely strict maintainability review for abstraction quality and giant files.
-- **[pstack-blast-radius](./skills/pstack-blast-radius/SKILL.md)**: Find what a change could break elsewhere before it ships, proven by running real code.
 - **[pstack-why](./skills/pstack-why/SKILL.md)**: A cited read on design rationale and tradeoffs — queries source control, issue tracker, docs, chat, and observability in parallel.
 
 ## Productivity & Docs
@@ -105,7 +100,6 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 - **[stokowski-cli](./skills/stokowski-cli/SKILL.md)**: Dispatch work to Stokowski's agent workflows via the `stok` CLI, then follow or act on it live — decide gates, send signals, add input, cancel.
 - **[stokowski-stuck-check](./skills/stokowski-stuck-check/SKILL.md)**: Find testing-uplift work Stokowski has parked on a human across ERICRULEZ and DEX — escalations, failed/cancelled runs, and items that stopped moving — with merge requests awaiting code review reported separately from work that needs a decision. Read-only, built to run on an OpenChamber schedule; see the root [`README.md`](../README.md#scheduled-tasks) setup prompt.
 - **[studio-improve-codebase-architecture](./skills/studio-improve-codebase-architecture/SKILL.md)**: Parallel architecture review of the Studio monorepo — batched sub-agents per package, HTML report, grilling loop.
-- **[studio-integration-testing](./skills/studio-integration-testing/SKILL.md)**: Integration tests for hooks/components that depend on DesignEngine, providers, and complex runtime state.
 - **[studio-migrate-to-jira](./skills/studio-migrate-to-jira/SKILL.md)**: Migrate GitLab work items from the Studio project into Jira Workstreams/Tasks.
 - **[studio-rebase](./skills/studio-rebase/SKILL.md)**: Fetch and rebase onto a target branch, then resolve all merge conflicts.
 - **[studio-rewrite-human-facing-text](./skills/studio-rewrite-human-facing-text/SKILL.md)**: Audit and rewrite code comments, commented-on code, ADRs, and READMEs touched in a branch or MR using `writing-code-comments` and `unslop`.

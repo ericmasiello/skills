@@ -35,9 +35,13 @@ Check, in platform order:
 
 **No template found** → compose free-form per Step 3, no forced section structure.
 
-Either way: strip every instructional HTML comment (`<!--...-->`) from the final text before submitting. Neither platform's CLI removes them, and "hidden" on the rendered page means hidden by that page's Markdown renderer only — the stored body/description still carries the raw comment until you strip it.
+Either way: strip every instructional HTML comment (`<!--...-->`) from the final text before submitting, except the `<!-- system-recap:start -->` and `<!-- system-recap:end -->` markers that `visual-recap` writes. Neither platform's CLI removes them, and "hidden" on the rendered page means hidden by that page's Markdown renderer only — the stored body/description still carries the raw comment until you strip it.
 
 ## Step 3: Compose
+
+**Preserve a recap block.** In update mode, if the current body contains a block between `<!-- system-recap:start -->` and `<!-- system-recap:end -->`, carry it into the new body verbatim, markers included, at the end if the new body has no better place. Never regenerate or edit it here; `visual-recap` owns it.
+
+**Alongside the Pocock `pr` skill.** `pr` is model-invoked whenever a PR body is written. For any create or update, this skill leads: it owns template detection, create/update mode and preservation. Fold `pr`'s Summary, Evidence and Merge Danger sections into the body only when no repo template applies.
 
 Read `references/writing-craft.md` once now — it walks Steps A through L in order; don't re-read mid-task. If Step 2 found a template, fill its sections instead of writing free-form (Step K covers both modes). When the body is finished, run it through the `unslop` skill before moving to Step 4.
 

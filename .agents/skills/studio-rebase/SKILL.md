@@ -37,7 +37,13 @@ git rebase <target-branch>
 
 ### 4. Resolve conflicts (if any)
 
-Call the Skill tool with "resolving-merge-conflicts" and follow its process for each conflicted file. Then continue the rebase:
+For each conflicted file:
+
+1. **Find the primary sources** for each conflict. Understand why each change was made and what the original intent was. Read the commit messages, check the MRs, check the original issues/tickets.
+2. **Resolve each hunk.** Preserve both intents where possible. Where incompatible, pick the one matching the rebase's stated goal and note the trade-off. Do **not** invent new behaviour. Always resolve; never `--abort`.
+3. Discover the project's **automated checks** and run them, typically typecheck, then tests, then format. Fix anything the rebase broke.
+
+Then continue the rebase:
 
 ```bash
 git rebase --continue

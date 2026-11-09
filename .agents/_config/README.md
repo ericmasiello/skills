@@ -13,7 +13,7 @@ _config/
         │   ├── issue-tracker.md
         │   ├── domain.md
         │   └── triage-labels.md
-        ├── CONTEXT.md
+        ├── GLOSSARY.md
         └── adr/
             └── 0001-....md
 ```

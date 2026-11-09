@@ -1,6 +1,7 @@
 ---
 name: skill-to-command
 description: Create an opencode command wrapper that pins a specific model to an existing skill. Use when user wants to create a command, wrap a skill, pin a model to a skill, or create a shortcut command for a skill invocation.
+disable-model-invocation: true
 ---
 
 # Wrap Skill
