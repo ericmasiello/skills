@@ -21,11 +21,15 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[to-tickets](./skills/to-tickets/SKILL.md)**: Break a plan, spec, or conversation into tracer-bullet tickets with declared blocking edges.
 - **[to-tickets-ericmasiello](./skills/to-tickets-ericmasiello/SKILL.md)**: Run this instead of `to-tickets` directly on a repo that might be in `setup-ericmasiello-skills` sidecar mode — same breakdown and publishing, plus a direct `docs/agents/*.md` read first, since the sidecar skips the `AGENTS.md` pointer `to-tickets` otherwise expects. See `../docs/adr/0013-*.md`.
 - **[wayfinder](./skills/wayfinder/SKILL.md)**: Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
+- **[software-factory](./skills/software-factory/SKILL.md)**: Shared vocabulary for designing a software factory: the tasks it runs and the services it plugs into (runners, git hosts, ticket trackers, observability). Upstream in-progress.
 - **[implement](./skills/implement/SKILL.md)**: Implement a piece of work based on a spec or set of tickets.
+- **[implement-spec](./skills/implement-spec/SKILL.md)**: Implement a whole spec and its tickets in one run: reads the tickets as a task graph, runs implementer subagents across the ready frontier in parallel, and lands everything on one integration branch.
 - **[split-mr](./skills/split-mr/SKILL.md)**: Decide whether a branch's diff should ship as a stack of small, single-concern MRs, a set of parallel ones, or stay as one — then build the chosen split.
 - **[write-pr-description](./skills/write-pr-description/SKILL.md)**: Compose or update a PR/MR title and description, honoring any repo-defined template — fires on creating a PR/MR, pushing to a branch that already has one open, or an explicit ask. Used by `studio-ship-work` as its description-composing step.
+- **[pr](./skills/pr/SKILL.md)**: Model-invoked whenever the agent writes a PR body: the smallest visual that shows the change, before/after evidence, and a one-way or two-way door call. Overlaps `write-pr-description`, `architectural-sketch` and `visual-recap`.
 - **[architectural-sketch](./skills/architectural-sketch/SKILL.md)**: Describe architectural changes, structural modifications, or implementation phases using before/after code diagrams and structural sketches.
 - **[code-review](./skills/code-review/SKILL.md)**: Two-axis review (Standards + Spec) of the changes since a fixed point, run as parallel sub-agents.
+- **[retro](./skills/retro/SKILL.md)**: Look back over a coding session and suggest changes to the agent's environment (checks, coding standards, steering files, tooling) rather than the code.
 - **[address-pr-feedback](./skills/address-pr-feedback/SKILL.md)**: Triage PR/MR review comments one at a time, reply, resolve, implement changes, and close out threads.
 - **[triage](./skills/triage/SKILL.md)**: Move issues and external PRs through a state machine of triage roles, categorize, verify, and write agent-ready briefs.
 - **[improve-codebase-architecture](./skills/improve-codebase-architecture/SKILL.md)**: Scan a codebase for deepening opportunities, present them as an HTML report, then grill through whichever one you pick.
@@ -62,6 +66,7 @@ Discipline applied automatically, not invoked by name — one behavior each.
 
 - **[codebase-design](./skills/codebase-design/SKILL.md)**: Shared vocabulary for designing deep modules — interfaces, seams, testability.
 - **[tdd](./skills/tdd/SKILL.md)**: Test-driven development with a red-green-refactor loop.
+- **[setup-ts-deep-modules](./skills/setup-ts-deep-modules/SKILL.md)**: Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders behind entry-point files. Upstream in-progress; user-invoked.
 - **[prototype](./skills/prototype/SKILL.md)**: Build a throwaway prototype to answer a design question (state/logic or UI variations).
 - **[diagnosing-bugs](./skills/diagnosing-bugs/SKILL.md)**: Disciplined diagnosis loop for hard bugs and performance regressions.
 - **[node-version-mismatch](./skills/node-version-mismatch/SKILL.md)**: Fix a Node engine/version error (`EBADDEVENGINES`, etc.) by running `nvm install` against the repo's `.nvmrc`, instead of guessing or editing the requirement.

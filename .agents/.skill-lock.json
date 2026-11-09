@@ -257,6 +257,56 @@
       "skillFolderHash": "759f1e56d0d2fdd3819d2a53b81e72767c08d914",
       "installedAt": "2026-10-14T15:55:48.798Z",
       "updatedAt": "2026-10-14T15:55:48.798Z"
+    },
+    "implement-spec": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/implement-spec/SKILL.md",
+      "skillFolderHash": "407c196f5c88af53c71efc8f31ee37c02dbb12e7",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-11-09T14:12:21.532Z",
+      "updatedAt": "2026-11-09T14:12:21.532Z"
+    },
+    "pr": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/pr/SKILL.md",
+      "skillFolderHash": "00b896d811adffad747c7ca30078d909d60c7f93",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-11-09T14:12:21.532Z",
+      "updatedAt": "2026-11-09T14:12:21.532Z"
+    },
+    "retro": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/retro/SKILL.md",
+      "skillFolderHash": "335c1862a43da9d629abafdb79ca0c0de118be08",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-11-09T14:12:21.532Z",
+      "updatedAt": "2026-11-09T14:12:21.532Z"
+    },
+    "setup-ts-deep-modules": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/setup-ts-deep-modules/SKILL.md",
+      "skillFolderHash": "b32508a8a7d62c07d32d7c5cff84d357719def7f",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-11-09T14:12:21.532Z",
+      "updatedAt": "2026-11-09T14:12:21.532Z"
+    },
+    "software-factory": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/software-factory/SKILL.md",
+      "skillFolderHash": "4b9e59cb67b8e5858525d93cf2ac1eb03a39d46b",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-11-09T14:12:21.532Z",
+      "updatedAt": "2026-11-09T14:12:21.532Z"
     }
   },
   "dismissed": {
