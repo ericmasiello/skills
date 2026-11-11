@@ -10,7 +10,7 @@ Issues and specs for this repo live as Jira work items in the **ERICRULEZ** proj
 - **Comment on a ticket**: `twg jira workitem comment create --id ERICRULEZ-<number> --body-format markdown`.
 - **Apply / remove labels**: `twg jira workitem update --id ERICRULEZ-<number>` with the labels field; Jira labels are a plain list, not a separate "labels" subcommand.
 - **Close**: Jira has no single universal "closed" state — check `twg jira workitem transitions query --id ERICRULEZ-<number>` for this project's actual terminal status name, then `twg jira workitem update --id ERICRULEZ-<number> --status "<Status name>"`.
-- **Merge requests**: this repo's code lives on GitLab, a separate system from the tracker. Open MRs there as usual (see `studio-ship-work` / `write-pr-description`), and reference the ERICRULEZ key in the MR title or description so the two stay linked. There is no native GitLab↔Jira issue link; the key reference is the convention.
+- **Merge requests**: this repo's code lives on GitLab, a separate system from the tracker. Open MRs there as usual (see `studio-ship-work`), and reference the ERICRULEZ key in the MR title or description so the two stay linked. There is no native GitLab↔Jira issue link; the key reference is the convention.
 - Before any command whose exact flags matter, run `twg help describe "jira workitem <subcommand>"` rather than guessing from memory — `vista-atlassian` documents this as the required discovery step.
 
 ## Merge requests as a triage surface

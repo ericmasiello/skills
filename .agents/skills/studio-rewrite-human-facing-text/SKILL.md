@@ -1,6 +1,7 @@
 ---
 name: studio-rewrite-human-facing-text
 description: Audit and rewrite human-facing text touched in a branch or MR using Studio writing-code-comments and unslop. Use when the user says 'studio-rewrite-human-facing-text', 'rewrite comments in MR', 'clean up text in branch', 'polish human-facing text', or provides a branch name or MR URL to rewrite text.
+disable-model-invocation: true
 ---
 
 # Studio Rewrite Human-Facing Text

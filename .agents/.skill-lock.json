@@ -64,15 +64,6 @@
       "installedAt": "2026-05-16T01:10:59.691Z",
       "updatedAt": "2026-08-20T14:09:43.260Z"
     },
-    "visual-recap": {
-      "source": "kentcdodds/kcd-skills",
-      "sourceType": "github",
-      "sourceUrl": "https://github.com/kentcdodds/kcd-skills.git",
-      "skillPath": "skills/visual-recap/SKILL.md",
-      "skillFolderHash": "6f5731e13fb6d2f0ab2151bce9013eb182c2e9a0",
-      "installedAt": "2026-07-28T17:28:12.271Z",
-      "updatedAt": "2026-07-28T17:28:12.271Z"
-    },
     "ask-matt": {
       "source": "mattpocock/skills",
       "sourceType": "github",

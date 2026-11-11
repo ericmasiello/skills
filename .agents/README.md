@@ -25,8 +25,7 @@ The backbone chain from idea to shipped change, roughly in the order you'd reach
 - **[implement](./skills/implement/SKILL.md)**: Implement a piece of work based on a spec or set of tickets.
 - **[implement-spec](./skills/implement-spec/SKILL.md)**: Implement a whole spec and its tickets in one run: reads the tickets as a task graph, runs implementer subagents across the ready frontier in parallel, and lands everything on one integration branch.
 - **[split-mr](./skills/split-mr/SKILL.md)**: Decide whether a branch's diff should ship as a stack of small, single-concern MRs, a set of parallel ones, or stay as one — then build the chosen split.
-- **[write-pr-description](./skills/write-pr-description/SKILL.md)**: Compose or update a PR/MR title and description, honoring any repo-defined template — fires on creating a PR/MR, pushing to a branch that already has one open, or an explicit ask. Used by `studio-ship-work` as its description-composing step.
-- **[pr](./skills/pr/SKILL.md)**: Model-invoked whenever the agent writes a PR body: the smallest visual that shows the change, before/after evidence, and a one-way or two-way door call. Overlaps `write-pr-description`, `architectural-sketch` and `visual-recap`.
+- **[pr](./skills/pr/SKILL.md)**: Model-invoked whenever the agent writes a PR body: the smallest visual that shows the change, before/after evidence, and a one-way or two-way door call. The repo's only PR-body structure; `architectural-sketch` supplies the diagrams it calls for.
 - **[architectural-sketch](./skills/architectural-sketch/SKILL.md)**: Describe architectural changes, structural modifications, or implementation phases using before/after code diagrams and structural sketches.
 - **[code-review](./skills/code-review/SKILL.md)**: Two-axis review (Standards + Spec) of the changes since a fixed point, run as parallel sub-agents.
 - **[retro](./skills/retro/SKILL.md)**: Look back over a coding session and suggest changes to the agent's environment (checks, coding standards, steering files, tooling) rather than the code.
@@ -84,7 +83,6 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[writing-for-agents](./skills/writing-for-agents/SKILL.md)**: Writing documents for agents — skills, `AGENTS.md`/`CLAUDE.md`, anything an agent reaches by a pointer.
 - **[diataxis](./skills/diataxis/SKILL.md)**: Classify, validate, generate, and audit documentation using the Diátaxis framework.
 - **[proofread](./skills/proofread/SKILL.md)**: Work with hosted Proof documents and Proof SDK-compatible deployments over HTTP.
-- **[visual-recap](./skills/visual-recap/SKILL.md)**: Generate and maintain a visual system-recap block in a PR description.
 - **[unslop](./skills/unslop/SKILL.md)**: Cut AI tells from any writing — must always apply.
 - **[pstack-typescript-best-practices](./skills/pstack-typescript-best-practices/SKILL.md)**: TypeScript best practices, used when reading or editing any `.ts`/`.tsx` file.
 - **[atlassian-mcp](./skills/atlassian-mcp/SKILL.md)**: Generic Atlassian (Jira/Confluence) integration via MCP.
@@ -104,7 +102,7 @@ Coupled to a specific employer's GitLab/Jira project — kept here deliberately 
 - **[studio-rebase](./skills/studio-rebase/SKILL.md)**: Fetch and rebase onto a target branch, then resolve all merge conflicts.
 - **[studio-rewrite-human-facing-text](./skills/studio-rewrite-human-facing-text/SKILL.md)**: Audit and rewrite code comments, commented-on code, ADRs, and READMEs touched in a branch or MR using `writing-code-comments` and `unslop`.
 - **[studio-review-test-coverage](./skills/studio-review-test-coverage/SKILL.md)**: Open HTML coverage reports for Studio source files in the browser.
-- **[studio-ship-work](./skills/studio-ship-work/SKILL.md)**: Commit, push, optionally open a GitLab MR (delegating the description to `write-pr-description`), and update the source issue's status labels.
+- **[studio-ship-work](./skills/studio-ship-work/SKILL.md)**: Commit, push, optionally open a GitLab MR — body from `pr`, fitted to the repo's GitLab MR template — then hand off Jira status syncing.
 - **[studio-worktree-zed](./skills/studio-worktree-zed/SKILL.md)**: Create a git worktree from a GitLab issue and open it in Zed.
 - **[vista-atlassian](./skills/vista-atlassian/SKILL.md)**: Jira/Confluence via Atlassian's official `twg` (Teamwork Graph CLI), pinned to the Vistaprint site — Rovo MCP is the fallback only if `twg` isn't set up.
 
