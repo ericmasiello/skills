@@ -44,6 +44,18 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 
 Symlinks `~/.agents` → this repo's `.agents`, each skill into `~/.claude/skills/<name>` so Claude Code picks it up (see `docs/adr/0012-*.md`), and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
 
+## Installed by other tools
+
+Not everything in the skill and agent directories comes from this repo. These tools write their own entries next to the symlinks `setup.sh` creates. They are left out of this repo on purpose. Each tool owns and updates its own files, and the per-entry layout from `docs/adr/0009-*.md` and `docs/adr/0010-*.md` keeps them out of this working tree. Don't copy them in here. Update or reinstall them with the tool that owns them.
+
+| Tool | What it installs | Where | Source of truth |
+|------|------------------|-------|-----------------|
+| `twg skills install` (run by `twg setup`) | `twg` and the `twg-*` skill bundle. Each copy carries a `.twg-install.json` | `~/.config/opencode/skills/`, `~/.claude/skills/` | Atlassian's `twg` CLI |
+| `vconfig opencode` | `test-*` skills and the `coverage-auditor`, `coverage-executor` and `coverage-reviewer` agents. These are copies, not symlinks | `~/.config/opencode/skills/`, `~/.config/opencode/agents/`, and the same names under `~/.copilot/skills/` and `~/.copilot/agents/` | [`vistaprint-org/ai-engineering/skills`](https://gitlab.com/vistaprint-org/ai-engineering/skills) |
+| Hand-made symlinks (inp-toolkit's own registration steps) | `inp-docs-maintenance` skill and the `inp-docs-triager` and `inp-docs-editor` agents | `~/.config/opencode/skills/`, `~/.config/opencode/agents/` | `~/Sites/inp-toolkit` — see its `docs/agents/inp-docs-pipeline.md` |
+
+None of these write to `~/.agents/skills/`. Apart from `.bak.*` backups left by `setup.sh`, every entry there is a symlink into this repo. Because the vconfig copies are snapshots, they drift from the source repo until vconfig runs again.
+
 ## Restricted repos & worktrees
 
 `setup-ericmasiello-skills` can configure a repo whose root file or `docs/` is restricted (CODEOWNERS-gated, shared with coworkers who don't use these skills) by writing its usual output to a personal sidecar instead, linked in via local-only symlinks — see [`docs/adr/0006-*.md`](docs/adr/0006-setup-ericmasiello-skills-sidecar-for-restricted-repos.md). Those symlinks are untracked filesystem state, so **every new worktree or clone of an already-configured restricted repo needs one run of [`relink.sh`](.agents/skills/setup-ericmasiello-skills/relink.sh)** before its `docs/agents`, `docs/adr`, or root context doc will resolve there — no arguments needed if your working directory is already inside that worktree.
