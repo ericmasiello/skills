@@ -36,6 +36,6 @@ Commit following the repo's existing message style (`git log --oneline -10`), pu
 git push -u origin HEAD
 ```
 
-Then compose the PR with the `write-pr-description` skill rather than `gh pr create --fill`. It finds the repo template, fills it, and updates the body when a PR is already open on the branch; `--fill` derives title and body from commit subjects and does neither.
+Then compose the body with the `pr` skill rather than `gh pr create --fill`. If the repo defines a PR template, fill the template's own sections with `pr`'s content instead of adding `pr`'s sections alongside them (`PULL_REQUEST_TEMPLATE.md` in `.github/`, the repo root, or `docs/`; on GitLab, `.gitlab/merge_request_templates/*.md`). If a PR is already open on the branch, update its body — a push is never just a push once one exists. `--fill` derives title and body from commit subjects and does none of this.
 
 See `docs/agents/issue-tracker.md` for `gh` conventions and for linking the PR back to an issue if one exists.

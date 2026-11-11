@@ -42,13 +42,19 @@ git push -u origin HEAD
 
 ### 4. Merge request
 
-Invoke the `write-pr-description` skill to compose and apply the MR description. Pass it:
+Compose the body with the `pr` skill, then fit that content to this repo's GitLab MR template. `pr` owns what goes in the body (Summary, Evidence, Merge Danger); the template owns how those pieces are labelled and ordered.
 
-- The Jira ticket(s) resolved in step 1. GitLab's `Closes #<iid>` footer syntax only works for native GitLab issues, not Jira keys — instead ask it to reference each ticket as a plain link near the end of the body, e.g. `Tracked by [ERICRULEZ-194](https://vistaprint.atlassian.net/browse/ERICRULEZ-194) (Jira).`
-- This steering note for its reviewer-test-guidance section: "Preview deployments cover the Vistaprint DEX, VCS DEX, and Design Services DEX. Vistaprint DEX is the default — don't name it explicitly unless the change also touches a non-default DEX (VCS DEX, Design Services DEX), in which case name that one."
-- This steering note for the title: "The `validate_mr_title` CI job blocks the MR — it lints the title as the future squash-commit message. Use one of these types, wider than your own default list: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`. Format: `type(scope): subject` (source of truth: `commitlint.config.mjs`; rationale: `docs/globalAdr/0031-adopt-conventional-commits-for-mr-intent.md`)."
+1. Invoke the `pr` skill for the content: the smallest visual that shows the change, before/after evidence, and the one-way-or-two-way door call.
+2. Detect the template: `.gitlab/merge_request_templates/*.md` (`Default.md` is the convention, not a requirement). Several templates → list them by filename and let the user pick. No template *file* but the project may have one configured at the settings level (a Premium/Ultimate database attribute `glab` cannot see) → ask rather than assume there is none.
+3. Fit `pr`'s content into the template's own sections: Summary into the summary-shaped section, Evidence into whichever section asks for validation, Merge Danger into whichever section asks for risk. Preserve every heading the template defines — don't rename, reorder, or drop one. Leave a section this change has nothing for empty rather than writing "N/A". No template at all → submit `pr`'s structure unchanged.
+4. Strip instructional HTML comments (`<!--...-->`) before submitting. Neither CLI removes them, so they survive in the stored body even though the rendered page hides them.
+5. If the template has a section for reviewer test guidance, fill it with what a human should check against a running preview. Preview deployments cover the Vistaprint DEX, VCS DEX, and Design Services DEX. Vistaprint DEX is the default — don't name it explicitly unless the change also touches a non-default DEX (VCS DEX, Design Services DEX), in which case name that one.
 
-Only skip invoking it if the user explicitly says not to create an MR (e.g., "don't create an MR", "no MR") and none already exists.
+Reference each Jira ticket from step 1 as a plain link near the end of the body, e.g. `Tracked by [ERICRULEZ-194](https://vistaprint.atlassian.net/browse/ERICRULEZ-194) (Jira).` GitLab's `Closes #<iid>` footer syntax closes native GitLab issues only, never Jira keys.
+
+Title: the `validate_mr_title` CI job blocks the MR — it lints the title as the future squash-commit message. Use one of these types, wider than `pr`'s default list: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`. Format: `type(scope): subject` (source of truth: `commitlint.config.mjs`; rationale: `docs/globalAdr/0031-adopt-conventional-commits-for-mr-intent.md`).
+
+Only skip the MR if the user explicitly says not to create one (e.g., "don't create an MR", "no MR") and none already exists. If one is already open on the branch, update its body rather than opening a second.
 
 ```bash
 # If creating:
@@ -60,7 +66,7 @@ glab mr create --title "<title>" --description "<body>" \
 
 This repo has no GitLab-issue-backed `workstream::*`/`status::*` label scheme for Jira-tracked work — don't apply [the shared label reference](../_studio-shared/LABELS.md) here. It still applies to skills working against real GitLab issues (e.g. `stokowski-implement`).
 
-Reviewer test guidance and the `## Architecture` diagram convention (from the `architectural-sketch` skill) live in `write-pr-description`'s writing-craft reference now — the DEX and MR-title steering notes above are the only Vistaprint/Studio-specific residue left.
+For structural changes, draw the `## Architecture` block per the `architectural-sketch` skill. Skip it for renames, pure bug fixes, and isolated style tweaks.
 
 ### 5. Hand off Jira status syncing
 
