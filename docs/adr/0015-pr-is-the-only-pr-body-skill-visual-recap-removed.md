@@ -1,0 +1,7 @@
+# pr is the only PR-body skill; visual-recap is removed
+
+Three skills drew the visual summary in a PR body: `pr` (synced from `mattpocock/skills`), the self-authored `write-pr-description`, and `visual-recap` (synced from `kentcdodds/kcd-skills`). Each had its own format, so they competed on every PR. `visual-recap` also requires `docs/contributing/architecture/primitives.yaml` before it classifies anything, and none of the repos these skills run in has that file.
+
+Decided on: `pr` is the one PR-body structure. `visual-recap` and `write-pr-description` are both deleted, and `visual-recap`'s `.skill-lock.json` entry goes with it so `npx skills update` stops tracking it. Fitting a repo's MR template is left to the caller: `studio-ship-work` maps `pr`'s sections into `.gitlab/merge_request_templates/*.md`, and `docs/agents/branching.md` says the same for this repo. Adding that logic to `pr` was rejected because `pr` belongs to Matt Pocock and an edit there would be lost on the next sync.
+
+Consequence: the missing `visual-recap` skill is deliberate, not an install that failed. Don't reinstall it from `kentcdodds/kcd-skills` unless a repo has a primitives map for it to read. This deletion also undoes commit `66407a9`, which taught `write-pr-description` to keep the `system-recap` block. `write-pr-description`'s writing guidance (title rules, sizing, voice, the compression pass, the `Closes` footer) went with it, and `pr` doesn't cover those.
