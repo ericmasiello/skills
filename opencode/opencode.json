@@ -61,34 +61,15 @@
     
     "servers": {
       "skylight": {
-        "type": "local",
-        "command": [
-          "npx",
-          "-y",
-          "skylight-mcp"
-        ],
-        "environment": {
-          // Works around an OpenCode bug, not a skylight-mcp one: OpenCode's
-          // MCP client advertises elicitation.form support during the
-          // handshake, but never answers an elicitation/create request back
-          // (the form is created for session "global" instead of the calling
-          // session, so no prompt ever renders). Any confirm-gated skylight
-          // tool (skylight_clear_list, bulk deletes, uploads, invites, etc.)
-          // then hangs until some outer timeout kills the call — ~600s via
-          // Code Mode. skylight-mcp's own confirm-write helper
-          // (@chrischall/mcp-utils) already ships this env var as the
-          // official escape hatch: it skips elicitation entirely and falls
-          // back to a two-step preview + confirmToken flow instead. Scoped to
-          // this one server via its own `environment`, not a global env var,
-          // so other MCP servers still get real confirmation prompts.
-          // Tracking: https://github.com/anomalyco/opencode/issues/51856
-          // (fix in progress — PR #53608). Safe to remove once that lands.
-          "MCP_CONFIRM_ELICITATION": "off",
-          // Credentials come from the shell environment (~/.zshrc), never
-          // inline. OpenCode must be launched from a shell that has them.
-          "SKYLIGHT_EMAIL": "{env:SKYLIGHT_EMAIL}",
-          "SKYLIGHT_PASSWORD": "{env:SKYLIGHT_PASSWORD}"
-        },
+        // The hosted Skylight server on the Synology NAS
+        // (github.com/ericmasiello/skylight-mcp-nas): one shared Skylight
+        // sign-in for every client, admin tools blocked server-side, and
+        // MCP_CONFIRM_ELICITATION=off set on the server, so OpenCode's
+        // elicitation bug (anomalyco/opencode#51856) can't hang confirm-gated
+        // calls. No local Skylight credentials needed: OpenCode signs in with
+        // GitHub through the server's auth proxy (/mcps → skylight).
+        "type": "remote",
+        "url": "https://skylight.tail1057f2.ts.net/mcp",
         // Off by default for every project on this machine (this is also
         // ~/.config/opencode/opencode.json via symlink, per ADR-0003). The
         // ericmasiello-skills project overrides this back on in its own

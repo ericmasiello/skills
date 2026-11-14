@@ -56,6 +56,18 @@ Not everything in the skill and agent directories comes from this repo. These to
 
 None of these write to `~/.agents/skills/`. Apart from `.bak.*` backups left by `setup.sh`, every entry there is a symlink into this repo. Because the vconfig copies are snapshots, they drift from the source repo until vconfig runs again.
 
+## Skylight
+
+The `skylight` MCP server in both `opencode.json` files is the hosted server on the Synology NAS ([`ericmasiello/skylight-mcp-nas`](https://github.com/ericmasiello/skylight-mcp-nas)), not a local `npx skylight-mcp`. It needs no Skylight credentials on this machine. The first time, run `/mcps` in OpenCode, select `skylight`, and sign in with GitHub. It's on only in this repo; the global config keeps it disabled elsewhere.
+
+claude.ai uses the same server as a custom connector. Claude Code and OpenCode get skills through `setup.sh`, but claude.ai needs each one uploaded:
+
+```sh
+scripts/package-claude-skill.sh skylight-homework   # writes ~/Downloads/skylight-homework.zip
+```
+
+Upload the zip in claude.ai under Settings → Capabilities → Skills (code execution must be on), then delete it: it contains the skill's gitignored `*.local.json` files, such as the kids' names. Re-run and re-upload after editing a skill. Only `skylight-homework` and `skylight-spelling-lessons` work there; the IXL skills run local scripts, sign in to IXL and use macOS Reminders.
+
 ## Restricted repos & worktrees
 
 `setup-ericmasiello-skills` can configure a repo whose root file or `docs/` is restricted (CODEOWNERS-gated, shared with coworkers who don't use these skills) by writing its usual output to a personal sidecar instead, linked in via local-only symlinks — see [`docs/adr/0006-*.md`](docs/adr/0006-setup-ericmasiello-skills-sidecar-for-restricted-repos.md). Those symlinks are untracked filesystem state, so **every new worktree or clone of an already-configured restricted repo needs one run of [`relink.sh`](.agents/skills/setup-ericmasiello-skills/relink.sh)** before its `docs/agents`, `docs/adr`, or root context doc will resolve there — no arguments needed if your working directory is already inside that worktree.
