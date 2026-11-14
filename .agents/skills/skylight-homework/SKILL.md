@@ -70,7 +70,17 @@ For the following week (9/14-9/18) the lesson pages to complete are: Lessons 1.0
 **Parsing rules:**
 - Extract the date range from the parenthetical (`M/D-M/D`, e.g. `9/14-9/18`) -- every calendar date in it, in order, including weekends if the email lists any.
 - Extract the lesson range (`major.minor-major.minor`, e.g. `1.06-1.08`). If the two bounds don't share the same major number (e.g. `1.09` to `2.01`), don't auto-increment across the boundary -- list the in-between lessons explicitly and confirm with the user instead.
-- **Front-load**: pair the earliest dates with the lessons, one lesson per day, in date order. `zip(dates, lessons)` is exactly this -- it stops at the shorter list, so trailing dates with no lesson left naturally get no homework. If there are *more* lessons than dates, stop and ask the user how to place the overflow instead of guessing.
+- **Back-load by lesson count**: one lesson per day, in date order, on consecutive days. Where the run starts depends on how many lessons there are, so lighter weeks start later instead of crowding Monday:
+
+  | Lessons | First day | Days used (5-day week) |
+  |---------|-----------|------------------------|
+  | 5 | Monday | Mon-Fri |
+  | 4 | Tuesday | Tue-Fri |
+  | 3 | Tuesday | Tue-Thu |
+  | 2 | Wednesday | Wed-Thu |
+  | 1 | Thursday | Thu |
+
+  The first day is an index into the date list (0 = Monday, 1 = Tuesday, ...). If there are *more* than 5 lessons, or fewer than 5 dates in the range, stop and ask the user how to place them instead of guessing.
 - Each pair becomes `summary = "Homework {lesson}"` (e.g. "Homework 1.06").
 
 Resolve dates and enumerate lessons together:
@@ -94,16 +104,19 @@ while d <= end:
 width = len(minor_start)
 lessons = [f'{lesson_major}.{i:0{width}d}' for i in range(int(minor_start), int(minor_end) + 1)]
 
-for pair in zip(dates, lessons):
-    print(pair)
-if len(lessons) > len(dates):
-    print('OVERFLOW -- lessons with no day:', lessons[len(dates):])
+first_day = {5: 0, 4: 1, 3: 1, 2: 2, 1: 3}  # lesson count -> index into dates
+if len(lessons) not in first_day or len(dates) < 5:
+    print('ASK THE USER -- lessons:', len(lessons), 'dates:', len(dates))
+else:
+    start = first_day[len(lessons)]
+    for pair in zip(dates[start:], lessons):
+        print(pair)
 "
 ```
 
 If the computed start date lands more than ~2 weeks in the past, the email is for next year -- rerun with `year = date.today().year + 1`.
 
-Example result: `('2026-09-14', '1.06')`, `('2026-09-15', '1.07')`, `('2026-09-16', '1.08')` -- 9/17 and 9/18 get no homework, matching the front-load rule.
+Example result: `('2026-09-15', '1.06')`, `('2026-09-16', '1.07')`, `('2026-09-17', '1.08')` -- three lessons start on Tuesday, so Monday 9/14 and Friday 9/18 get no homework.
 
 ## Step 2: Resolve family members
 
