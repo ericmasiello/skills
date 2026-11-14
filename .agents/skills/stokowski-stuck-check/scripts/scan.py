@@ -20,10 +20,17 @@ Why the join is work-item-first: a work item carries `origin.reference
 .display_key` back to its Jira ticket, so `stok list` alone names every ticket
 Stokowski has ever touched. JQL discovery is added on top for the opposite
 case -- a ticket carrying the label that Stokowski has never picked up -- but
-it cannot be the primary source: Jira's search index can omit tickets that the
-issue API still returns (observed on ERICRULEZ-228/229/230, 2026-11-02), which
-would silently drop exactly the stuck work this check exists to find. Every
-ticket read goes through `twg jira workitem get`, which hits the issue API.
+it cannot be the primary source: Jira's search index can omit a ticket the
+issue API still returns, which would silently drop exactly the stuck work this
+check exists to find. Every ticket read goes through `twg jira workitem get`,
+which hits the issue API.
+
+Archived tickets are the one case where search omission is the answer rather
+than a gap: an archived issue is dropped from JQL entirely and comes back from
+the issue API looking like any other ticket. `fetch_archived_ticket_keys`
+therefore probes exact keys and confirms each miss with the transition list,
+because reporting an archived ticket as idle work (ERICRULEZ-230, 25 days old)
+sends the reader to close a ticket nobody can open.
 """
 
 import argparse
@@ -305,6 +312,114 @@ def hydrate_tickets(
     if missing:
         errors.append(f"jira workitem get returned no data for: {', '.join(missing)}")
     return tickets
+
+
+ARCHIVE_PROBE_CHUNK = 50
+
+
+def searchable_ticket_keys(keys: list[str], chunk: int = ARCHIVE_PROBE_CHUNK) -> set[str]:
+    """Keys an exact-key JQL query can see.
+
+    An archived issue is absent from Jira search entirely -- even `key = PROJ-1`
+    returns nothing for one -- while the issue API still serves it looking
+    exactly like a live ticket: same status, same fields, no archive flag on the
+    payload. Probing by key is therefore the only way to tell the two apart.
+    It is cheap: 139 keys cost three queries.
+    """
+    found: set[str] = set()
+    for start in range(0, len(keys), chunk):
+        batch = keys[start : start + chunk]
+        raw = parse_json(
+            sh(
+                [
+                    "twg",
+                    "-o",
+                    "json",
+                    "--output-summary",
+                    "none",
+                    "jira",
+                    "workitem",
+                    "query",
+                    "--jql",
+                    f"key in ({', '.join(batch)})",
+                    "--fields",
+                    "key",
+                    "--first",
+                    str(len(batch)),
+                ]
+            ),
+            "jira workitem query (archive probe)",
+        )
+        for issue in (raw.get("data") or {}).get("issues") or []:
+            key = issue.get("key")
+            if key:
+                found.add(key)
+    return found
+
+
+def ticket_is_archived(key: str) -> bool:
+    """An archived issue is read-only, so Jira offers it no transitions."""
+    raw = parse_json(
+        sh(
+            [
+                "twg",
+                "-o",
+                "json",
+                "--output-summary",
+                "none",
+                "jira",
+                "workitem",
+                "transitions",
+                "query",
+                "--id",
+                key,
+            ]
+        ),
+        f"jira workitem transitions {key}",
+    )
+    return not ((raw.get("data") or {}).get("transitions") or [])
+
+
+def fetch_archived_ticket_keys(
+    tickets: dict[str, dict[str, Any]], warnings: list[str]
+) -> set[str]:
+    """Tickets archived in Jira: out of scope, never reported, never re-dispatched.
+
+    Two signals are required, because either alone lies. Jira search misses a
+    recently created ticket for a few minutes (index lag, the reason every
+    ticket read goes through the issue API), and a live ticket can offer no
+    transitions if this account may not move it. Archived means *both* "search
+    cannot see it" and "Jira offers it no transitions".
+    """
+    keys = sorted(tickets)
+    if not keys:
+        return set()
+    try:
+        searchable = searchable_ticket_keys(keys)
+    except (CommandError, OSError) as exc:
+        warnings.append(
+            f"archive check skipped ({str(exc)[:120]}); archived tickets may be reported"
+        )
+        return set()
+
+    archived: set[str] = set()
+    for key in keys:
+        if key in searchable:
+            continue
+        try:
+            if ticket_is_archived(key):
+                archived.add(key)
+            else:
+                # Newer than the search index, not archived. Keep it: dropping a
+                # fresh ticket is exactly the failure this check must not cause.
+                warnings.append(
+                    f"{key}: absent from Jira search but still transitionable; kept"
+                )
+        except (CommandError, OSError) as exc:
+            warnings.append(
+                f"{key}: archive state unverified ({str(exc)[:100]}); reported as usual"
+            )
+    return archived
 
 
 def ticket_key_of(item: dict[str, Any]) -> str | None:
@@ -1201,6 +1316,12 @@ def main() -> int:
         print(json.dumps({"errors": [str(exc)], "generated_at": now.isoformat()}, indent=2))
         return 1
 
+    # Archived tickets read like live ones through the issue API, so they have to
+    # be identified before anything is reported: an archived ticket's idle run is
+    # not work waiting on a human, and it must never be re-dispatched.
+    warnings: list[str] = []
+    archived_keys = fetch_archived_ticket_keys(tickets, warnings)
+
     detail_cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     def detail_for(stok_project: str, item_id: str) -> dict[str, Any]:
@@ -1281,6 +1402,10 @@ def main() -> int:
         return mr_cache[key]
 
     for key in candidates:
+        if key in archived_keys:
+            # Archived in Jira: out of scope, not work waiting on a human, and
+            # not a re-dispatch target. Its run can still look idle or blocked.
+            continue
         ticket = tickets.get(key)
         if ticket is None or ticket["status_category"] == "done":
             continue
@@ -1533,7 +1658,6 @@ def main() -> int:
 
     # A row whose MR state could not be verified must not read like a verified
     # one. These are gaps in the check, not failures of the scan.
-    warnings: list[str] = []
     for name in ("code_review", "needs_human", "idle"):
         for record in buckets[name]:
             check = record.get("mr_check")
@@ -1553,9 +1677,13 @@ def main() -> int:
             "boards": boards,
             "labels": list(LABELS),
             "workflow_ids": sorted(WORKFLOW_IDS),
-            "tickets": len(tickets),
+            "tickets": len(tickets) - len(archived_keys),
+            "archived_excluded": len(archived_keys),
+            "archived_tickets": sorted(archived_keys),
             "work_items_listed": sum(len(v) for v in items_by_project.values()),
-            "work_items_in_scope": len(latest_by_ticket),
+            "work_items_in_scope": sum(
+                1 for key in latest_by_ticket if key not in archived_keys
+            ),
             "mr_check_enabled": not args.no_mr_check,
             "truncated": truncated,
         },
