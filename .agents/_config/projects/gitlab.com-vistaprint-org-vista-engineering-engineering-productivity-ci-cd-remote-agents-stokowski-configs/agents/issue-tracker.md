@@ -17,4 +17,9 @@ Look up the Jira issue by key in project ERICRULEZ.
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. Map and child tickets are both Jira issues in ERICRULEZ; the map is an Epic (or an issue labelled `wayfinder-map` if Epics aren't in use), children are linked as sub-tasks or via Jira issue links, with a `Blocked by` link for gating.
+Used by `/wayfinder`. ERICRULEZ has no Epic type: its hierarchy is Workstream → Task → Sub-task. The map is labelled `wayfinder-map` and sits one level above its tickets:
+
+- **When an existing Workstream already covers the effort** (the usual case): the map is a **Task** under that Workstream, and its tickets are **Sub-tasks** of the map.
+- **When the effort is its own initiative**: the map is a new **Workstream**, and its tickets are **Tasks** under it.
+
+Tickets carry `wayfinder-research` / `wayfinder-prototype` / `wayfinder-grilling` / `wayfinder-task` labels, and are gated with native `Blocks` issue links. The full command recipes live in the Studio repo's `docs/agents/issue-tracker.md` ("Wayfinding operations").
