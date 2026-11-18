@@ -38,9 +38,10 @@
       "model": "cimpress-ai-gateway/eu.anthropic.claude-sonnet-5"
     }
   },
-  "browser_automation_engine": {
-    "provider": "playwright"
-  },
+  // Keep this even though .agents/skills/playwright is deleted. The plugin always
+  // adds its own builtin "playwright" browser skill. Without this line it returns
+  // and competes with agent-browser. See docs/adr/0016-*.md.
+  "disabled_skills": ["playwright"],
   "categories": {
     "visual-engineering": {
       "model": "cimpress-ai-gateway/gpt-5.6-luna",
