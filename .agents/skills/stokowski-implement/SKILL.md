@@ -1,11 +1,11 @@
 ---
 name: stokowski-implement
-description: Hand off ERICRULEZ ticket(s) to Stokowski by resolving which workflow (`workflow:*`) and repo (`repo:*`) label each one needs — inferred from the prompt, ticket context, or an interactive menu when ambiguous — then applying it only once Jira's own blocking relationships confirm the ticket is actually startable. Use when the user says "hand this off to Stokowski", "dispatch this to Stokowski", "label this for Stokowski", "run a coverage audit on this ticket", "quick-mr this ticket", "full CE this", or right after filing ERICRULEZ follow-up tickets that should become pickable.
+description: Hand off ERICRULEZ ticket(s) to Stokowski by resolving which workflow (`workflow:*`) and repo (`repo:*`) label each one needs — inferred from the prompt, ticket context, or an interactive menu when ambiguous — then applying it, to blocked tickets too, since Stokowski waits on Jira's "is blocked by" links. Use when the user says "hand this off to Stokowski", "dispatch this to Stokowski", "label this for Stokowski", "run a coverage audit on this ticket", "quick-mr this ticket", "full CE this", or right after filing ERICRULEZ follow-up tickets that should become pickable.
 ---
 
 # Stokowski Implement
 
-Stokowski (the execution agent that works ERICRULEZ tickets) only picks up a ticket once it carries `stokowski-ericrulez`. Which of its workflows actually runs is decided by whichever `workflow:*` label rides along with it — get that wrong and the ticket runs the wrong playbook, not just a late one. This skill resolves the ticket, the workflow, and the repo, then applies all three labels — but only to a ticket Jira's own blocking relationships say is actually startable.
+Stokowski (the execution agent that works ERICRULEZ tickets) only picks up a ticket once it carries `stokowski-ericrulez`. Which of its workflows actually runs is decided by whichever `workflow:*` label rides along with it — get that wrong and the ticket runs the wrong playbook, not just a late one. This skill resolves the ticket, the workflow, and the repo, then applies all three labels. A labelled ticket with open blockers waits: Stokowski holds it until every "is blocked by" ticket is done, so the blocking links, not the timing of the label, decide when work starts.
 
 Requires `twg` authenticated against `vistaprint.atlassian.net`; see [`vista-atlassian`](../vista-atlassian/SKILL.md) for auth/setup.
 
@@ -68,19 +68,21 @@ repo:https://gitlab.com/vistaprint-org/<subgroup>/<repo>.git
 3. URL starts with an allowed prefix → use `repo:<full-clone-url>` as the label. (Jira labels can't contain spaces or commas; `:` `/` `.` `-` are fine.)
 4. URL outside every allowed prefix → stop and tell the user. Stokowski refuses to clone it; don't guess or silently fall back to the default repo.
 
-## 4. Check readiness
+## 4. Check blocking links
+
+Stokowski waits for every inward "is blocked by" ticket to be done before it starts a labelled ticket (confirmed by its users in [#help-stokowski, 2026-11-18](https://vistaprint.slack.com/archives/C0B1NCUQ35M/p1795021964470679)). So label blocked tickets now; what matters is that their links are right, because a missing or reversed link lets Stokowski start early.
 
 For each ticket:
 
 1. `twg jira workitem get <key> --fields labels,status,summary,description` — current labels, status, summary.
-2. `twg jira workitem link query --issue-id <key>` and inspect inward "is blocked by" links.
-3. For every blocker found, check its status (`twg jira workitem get <blocker-key>`). If any blocker isn't Done/Closed, the ticket is **not ready** — skip it and note why.
+2. `twg jira workitem link query --issue-id <key>` and list its inward "is blocked by" links, with each blocker's status (`twg jira workitem get <blocker-key>`).
+3. If the ticket's description or the conversation says it depends on another ticket that isn't among those links, or a link points the wrong way (the ticket "blocks" what it depends on), fix the link before labelling. Inward "is blocked by" on the dependent ticket is the right direction.
 
-Never label a ticket still gated by an open blocker: Stokowski grabs it the moment the label lands, whether or not the work behind it is actually startable yet.
+Step 4 is done when every ticket's open blockers are listed and its links match the dependencies you know about.
 
 ## 5. Apply labels
 
-For each ready ticket, add `stokowski-ericrulez` plus the resolved `workflow:<name>` and `repo:<name>`, and strip any other `workflow:*` label already on the ticket — only one should ever ride at once:
+For each ticket, blocked or not, add `stokowski-ericrulez` plus the resolved `workflow:<name>` and `repo:<name>`, and strip any other `workflow:*` label already on the ticket — only one should ever ride at once:
 
 ```bash
 twg jira workitem update --id <key> --add-labels "stokowski-ericrulez,workflow:<name>,repo:<name>" --remove-labels "workflow:<stale-name>"
@@ -90,4 +92,4 @@ Omit `--remove-labels` when the ticket carries no stale workflow label to drop.
 
 ## 6. Verify and report
 
-Re-fetch each ticket's `labels` field to confirm the write stuck. Report one table: ticket key + summary, resolved `repo:*`, resolved `workflow:*`, and action taken — `Labeled & ready` or `Skipped (blocked by <key>)`.
+Re-fetch each ticket's `labels` field to confirm the write stuck. Report one table: ticket key + summary, resolved `repo:*`, resolved `workflow:*`, and action taken — `Labeled & ready`, or `Labeled, waiting on <keys>` listing the open blockers Stokowski will wait for.
