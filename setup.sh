@@ -165,7 +165,7 @@ echo
 check_cli gh
 check_cli td
 check_cli twg
-check_cli playwright-cli
+check_cli agent-browser
 
 echo
 echo "Done. Any 'backed up' line above moved a pre-existing file/dir aside —"

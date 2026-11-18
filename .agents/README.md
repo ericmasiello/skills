@@ -1,6 +1,6 @@
 # Agent Skills
 
-Eric's personal collection of agent skills, installed at `~/.agents` (see `../docs/adr/0002-*.md` for why that's a symlink into this repo's `.agents/` directory, not a checkout of its own). Skills are managed via `npx skills` — `.skill-lock.json` tracks which ones are synced from upstream sources (`mattpocock/skills`, `vercel-labs/skills`, `jeffallan/claude-skills`) versus self-authored or reconciled in from other machines. See `GLOSSARY.md` for the vocabulary used to talk about that provenance.
+Eric's personal collection of agent skills, installed at `~/.agents` (see `../docs/adr/0002-*.md` for why that's a symlink into this repo's `.agents/` directory, not a checkout of its own). Skills are managed via `npx skills` — `.skill-lock.json` tracks which ones are synced from upstream sources (`mattpocock/skills`, `vercel-labs/skills`, `vercel-labs/agent-browser`, `jeffallan/claude-skills`) versus self-authored or reconciled in from other machines. See `GLOSSARY.md` for the vocabulary used to talk about that provenance.
 
 This file is a map back to any skill by what it's for, in the spirit of [mattpocock/skills](https://github.com/mattpocock/skills)'s own README.
 
@@ -63,7 +63,7 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[diagnosing-bugs](./skills/diagnosing-bugs/SKILL.md)**: Disciplined diagnosis loop for hard bugs and performance regressions.
 - **[node-version-mismatch](./skills/node-version-mismatch/SKILL.md)**: Fix a Node engine/version error (`EBADDEVENGINES`, etc.) by running `nvm install` against the repo's `.nvmrc`, instead of guessing or editing the requirement.
 - **[glab-auth-error](./skills/glab-auth-error/SKILL.md)**: Fix a `glab` 401/"no token found" error by running `glab auth login`/`glab auth status`, instead of hunting for an alternate auth path.
-- **[playwright](./skills/playwright/SKILL.md)**: Shadows the builtin browser-automation skill — model-invoked automatically for any browser task, forcing `playwright-cli` (headed by default) over `openchamber_web`. Requires `browser_automation_engine.provider: "playwright"` in `opencode/oh-my-openagent.json` — see `../docs/adr/0007-*.md` for why that pairing matters.
+- **[agent-browser](./skills/agent-browser/SKILL.md)**: The only browser-automation skill: drives a real Chrome through the `agent-browser` CLI, so embedded browsers like `openchamber_web` are never used. Synced from `vercel-labs/agent-browser`. The `SKILL.md` is a stub that loads the usage guide matching the installed CLI (`agent-browser skills get core`), so don't edit it here. The builtin `playwright` skill is turned off with `disabled_skills` in `opencode/oh-my-openagent.json`. See `../docs/adr/0016-*.md`.
 - **[research](./skills/research/SKILL.md)**: Investigate a question against high-trust primary sources and capture findings as a Markdown file, run as a background agent.
 - **[writing-code-comments](./skills/writing-code-comments/SKILL.md)**: Write and improve code comments, using commenting as a design-review forcing function. Named to match Studio's own project-scoped skill of the same name, so that one takes precedence there — see `../docs/adr/0011-*.md`.
 - **[wizard](./skills/wizard/SKILL.md)**: Generate an interactive bash wizard for steps only a human can perform (credentials, dashboards, provisioning).

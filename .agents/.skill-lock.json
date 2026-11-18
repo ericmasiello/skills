@@ -298,6 +298,16 @@
       "pluginName": "mattpocock-skills",
       "installedAt": "2026-11-09T14:12:21.532Z",
       "updatedAt": "2026-11-09T14:12:21.532Z"
+    },
+    "agent-browser": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/agent-browser.git",
+      "commit": "b06e2533ba9b3823b8a96c859d455cb55f4d7893",
+      "skillPath": "skills/agent-browser/SKILL.md",
+      "skillFolderHash": "d75a393c9a371295c6d6be46c34938e76ef21184",
+      "installedAt": "2026-11-17T18:23:26.787Z",
+      "updatedAt": "2026-11-17T18:23:26.787Z"
     }
   },
   "dismissed": {

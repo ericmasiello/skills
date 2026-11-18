@@ -38,9 +38,7 @@
       "model": "cimpress-ai-gateway/eu.anthropic.claude-sonnet-5"
     }
   },
-  "browser_automation_engine": {
-    "provider": "playwright"
-  },
+  "disabled_skills": ["playwright"],
   "categories": {
     "visual-engineering": {
       "model": "cimpress-ai-gateway/gpt-5.6-luna",
