@@ -7,25 +7,27 @@ Use the `acli` CLI (see the `vista-atlassian` skill) for all operations; fall ba
 server (`io.vista/atlassian-rovo-mcp`) only for operations `acli` can't handle (e.g. CQL search on
 Confluence, worklogs, remote issue links).
 
-## Epic-first structure (mandatory)
+## Workstream-first structure (mandatory)
 
-Every work item — issue, story, task, or bug — is tracked as a **child of an Epic**. Never create a
-bare standalone issue.
+ERICRULEZ has no Epic issue type. Its hierarchy is **Workstream → Task → Sub-task**. Every Task is
+tracked as a **child of a Workstream**. Never create a bare standalone Task.
 
-- **Before creating any task/bug/story**, find-or-create the Epic for the initiating body of work
-  (feature, project, initiative): `acli jira workitem search --jql "project = ERICRULEZ AND type = Epic AND text ~ \"<topic>\"" --json`.
-- **The Epic holds the "why" and the "in what order"**: high-level design write-ups, architecture
-  decisions, and sequencing of the work go in the Epic's description (or a linked Confluence page via
+- **Before creating any Task**, find-or-create the Workstream for the initiating body of work
+  (feature, project, initiative): `acli jira workitem search --jql "project = ERICRULEZ AND type = Workstream AND text ~ \"<topic>\"" --json`.
+- **The Workstream holds the "why" and the "in what order"**: high-level design write-ups, architecture
+  decisions, and sequencing of the work go in the Workstream's description (or a linked Confluence page via
   `vista-atlassian`) — not scattered across child tickets.
-- **Child issues are the executable units**: each is a concrete, independently actionable task —
-  never a design doc. Set the Epic as parent at creation time with `--parent <EPIC-KEY>`.
-- **When a skill says "publish to the issue tracker"**: resolve the Epic first (find or create), then
+- **Tasks are the executable units**: each is a concrete, independently actionable task —
+  never a design doc. Set the Workstream as parent at creation time with `--parent <WORKSTREAM-KEY>`.
+- **Sub-tasks** break one Task down further, with `--type Sub-task --parent <TASK-KEY>`.
+- **When a skill says "publish to the issue tracker"**: resolve the Workstream first (find or create), then
   create the work item as its child.
 
 ## Conventions
 
-- **Create an Epic**: `acli jira workitem create --project ERICRULEZ --type Epic --summary "..." --description "..."`
-- **Create a child issue**: `acli jira workitem create --project ERICRULEZ --type Task --summary "..." --description "..." --parent <EPIC-KEY>`
+- **Create a Workstream**: `acli jira workitem create --project ERICRULEZ --type Workstream --summary "..." --description "..."`
+- **Create a Task**: `acli jira workitem create --project ERICRULEZ --type Task --summary "..." --description "..." --parent <WORKSTREAM-KEY>`
+- **Create a Sub-task**: `acli jira workitem create --project ERICRULEZ --type Sub-task --summary "..." --description "..." --parent <TASK-KEY>`
 - **View an issue**: `acli jira workitem view ERICRULEZ-123 --json`
 - **Search**: `acli jira workitem search --jql "project = ERICRULEZ AND status = 'In Progress'" --json`
 - **Comment**: `acli jira workitem comment create --key ERICRULEZ-123 --body "..."`
@@ -45,15 +47,20 @@ code review, not as feature-request intake.
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. Per the Epic-first structure above, the **map** *is* the Epic — don't wrap it in
-a separate outer Epic.
+Used by `/wayfinder`. The map sits one level above its tickets, so pick the level by whether a
+Workstream already covers the effort:
 
-- **Map**: a Jira issue in ERICRULEZ, **type Epic**, labelled `wayfinder-map`. Its description holds
-  the Notes / Decisions-so-far / Fog body — consistent with design/sequencing content living on the
-  Epic. `acli jira workitem create --project ERICRULEZ --type Epic --summary "..." --label wayfinder-map`
-- **Child ticket**: created as a child of the map via `--parent <map-key>`, labelled
-  `wayfinder-research` / `wayfinder-prototype` / `wayfinder-grilling` / `wayfinder-task`.
-- **Blocking**: `acli jira workitem link create --out <child> --in <blocker> --type "Blocks" --yes`.
+- **Map**, labelled `wayfinder-map`, its description holding the Destination / Notes / Decisions-so-far /
+  Not-yet-specified / Out-of-scope body:
+  - **When an existing Workstream already covers the effort** (the usual case): the map is a **Task**
+    under that Workstream. `acli jira workitem create --project ERICRULEZ --type Task --parent <WORKSTREAM-KEY> --summary "..." --label wayfinder-map`
+  - **When the effort is its own initiative**: the map is a new **Workstream**.
+    `acli jira workitem create --project ERICRULEZ --type Workstream --summary "..." --label wayfinder-map`
+- **Child ticket**: a **Sub-task** of a Task map, or a **Task** of a Workstream map, created with
+  `--parent <map-key>`, labelled `wayfinder-research` / `wayfinder-prototype` / `wayfinder-grilling` /
+  `wayfinder-task`.
+- **Blocking**: `acli jira workitem link create --out <blocker> --in <child> --type "Blocks" --yes`
+  reads "<blocker> blocks <child>". On the child, the blocker shows up as the link's `outwardIssue`.
   A ticket is unblocked when every blocker is closed.
 - **Frontier query**: `acli jira workitem search --jql "project = ERICRULEZ AND parent = <map-key>" --json`,
   drop any with an open blocker or an assignee; first in map order wins.
