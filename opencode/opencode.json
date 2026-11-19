@@ -30,7 +30,7 @@
       },
       "io.vista/gitlab-mcp": {
         "type": "remote",
-        "disabled": false,
+        "disabled": true,
         "url": "https://gitlab.com/api/v4/mcp"
       },
       "io.vista/miro-mcp": {
@@ -65,8 +65,8 @@
         "url": "https://skylight.tail1057f2.ts.net/mcp",
         // Off by default for every project on this machine (this is also
         // ~/.config/opencode/opencode.json via symlink, per ADR-0003). The
-        // ericmasiello-skills project overrides this back on in its own
-        // root-level opencode.json, since that's the one place the
+        // ericmasiello-skills project turns it back on through its own
+        // .opencode/mcp-on.json, since that's the one place the
         // Skylight-dependent skills actually live.
         "disabled": true
       },
@@ -83,6 +83,10 @@
         },
         "disabled": true
       },
+      // The only server left enabled for every project on this machine. Opt
+      // a repo out of it (or into any other server here) by listing names in
+      // that repo's .opencode/mcp-on.json — see opencode/plugins/mcp-on/
+      // and docs/adr/0017-*.md.
       "slack": {
         "type": "remote",
         "url": "https://gateway.ai-platform-sandbox.vista.io/gateways/slack/mcp",
