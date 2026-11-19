@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Verifies that setup.sh produces exactly the symlinks docs/adr/0009-*.md,
-# docs/adr/0010-*.md and docs/adr/0012-*.md say it should: ~/.agents,
-# ~/.agents/skills, ~/.claude/skills and ~/.config/opencode/agents as real
-# directories, with every entry inside each individually symlinked back into
-# the repo. Run by CI
+# docs/adr/0010-*.md, docs/adr/0012-*.md and docs/adr/0017-*.md say it should:
+# ~/.agents, ~/.agents/skills, ~/.claude/skills, ~/.config/opencode/agents and
+# ~/.config/opencode/plugins as real directories, with every entry inside each
+# individually symlinked back into the repo. Run by CI
 # (.github/workflows/verify-symlinks.yml) on every PR so setup.sh's linking
 # logic can't silently drift from what's actually in the repo.
 #
@@ -142,6 +142,27 @@ done
 check_symlink "$SCRATCH_HOME/.config/opencode/commands"            "$REPO_DIR/opencode/commands"
 check_symlink "$SCRATCH_HOME/.config/opencode/opencode.json"       "$REPO_DIR/opencode/opencode.json"
 check_symlink "$SCRATCH_HOME/.config/opencode/oh-my-openagent.json" "$REPO_DIR/opencode/oh-my-openagent.json"
+
+# The mcp-on plugin (docs/adr/0017-*.md) is linked per entry so vendor dirs
+# can add their own plugins, same as the agents directory above.
+OPENCODE_PLUGINS_DEST="$SCRATCH_HOME/.config/opencode/plugins"
+check_real_dir "$OPENCODE_PLUGINS_DEST"
+
+expected_opencode_plugins=()
+for entry in "$REPO_DIR/opencode/plugins"/*; do
+  name="$(basename "$entry")"
+  expected_opencode_plugins+=("$name")
+  check_symlink "$OPENCODE_PLUGINS_DEST/$name" "$entry"
+done
+
+for entry in "$OPENCODE_PLUGINS_DEST"/*; do
+  name="$(basename "$entry")"
+  found=0
+  for p in "${expected_opencode_plugins[@]}"; do
+    [[ "$p" == "$name" ]] && found=1
+  done
+  [[ "$found" == 1 ]] || error "setup.sh produced an entry not present in the repo: $OPENCODE_PLUGINS_DEST/$name"
+done
 
 # Guard against the exact mistake docs/adr/0009-*.md was written after: no
 # file matching .gitignore's vendor-skill patterns should ever be tracked.

@@ -13,8 +13,11 @@ Eric's personal agent skills collection and Opencode runtime configuration. The 
 ├── opencode/
 │   ├── agents/          # custom opencode agent personas
 │   ├── commands/        # custom opencode slash commands
+│   ├── plugins/mcp-on/  # per-repo MCP opt-in plugin (docs/adr/0017-*.md)
 │   ├── opencode.json
 │   └── oh-my-openagent.json
+├── .opencode/
+│   └── mcp-on.json      # this repo's MCP opt-ins (servers to turn on here)
 ├── docs/
 │   ├── adr/             # architecture decision records for this repo
 │   └── agents/          # how skills should use this repo's issue tracker, labels, domain docs
@@ -45,6 +48,16 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 
 Symlinks `~/.agents` → this repo's `.agents`, each skill into `~/.claude/skills/<name>` so Claude Code picks it up (see `docs/adr/0012-*.md`), and each `~/.config/opencode/*` target → the matching `opencode/*` file here. Safe to re-run; existing correct symlinks are left alone, and a file or directory already at the destination is backed up (moved aside with a timestamped `.bak.<UTC-timestamp>` suffix, never deleted) before the symlink replaces it — see `docs/adr/0005-*.md`. `opencode.json` references `${STITCH_API_KEY}` via `{env:STITCH_API_KEY}` — export that in your shell profile first (see `docs/adr/0004-*.md`).
 
+## MCP servers
+
+Every MCP server in `opencode/opencode.json` is `disabled: true` except `slack`, so a project only pays for the servers it uses. A repo turns others on by committing `.opencode/mcp-on.json` there:
+
+```jsonc
+["skylight"]
+```
+
+`opencode/plugins/mcp-on/` (installed by `setup.sh` into `~/.config/opencode/plugins/`) reads that file and enables the named servers, inheriting each one's url, headers and environment from the global config. Don't repeat a server's definition in a project `opencode.json` to enable it: a project config replaces the whole server object, and a partial one is dropped entirely. See `docs/adr/0017-*.md`.
+
 ## Installed by other tools
 
 Not everything in the skill and agent directories comes from this repo. These tools write their own entries next to the symlinks `setup.sh` creates. They are left out of this repo on purpose. Each tool owns and updates its own files, and the per-entry layout from `docs/adr/0009-*.md` and `docs/adr/0010-*.md` keeps them out of this working tree. Don't copy them in here. Update or reinstall them with the tool that owns them.
@@ -59,7 +72,7 @@ None of these write to `~/.agents/skills/`. Apart from `.bak.*` backups left by 
 
 ## Skylight
 
-The `skylight` MCP server in both `opencode.json` files is the hosted server on the Synology NAS ([`ericmasiello/skylight-mcp-nas`](https://github.com/ericmasiello/skylight-mcp-nas)), not a local `npx skylight-mcp`. It needs no Skylight credentials on this machine. The first time, run `/mcps` in OpenCode, select `skylight`, and sign in with GitHub. It's on only in this repo; the global config keeps it disabled elsewhere.
+The `skylight` MCP server in `opencode/opencode.json` is the hosted server on the Synology NAS ([`ericmasiello/skylight-mcp-nas`](https://github.com/ericmasiello/skylight-mcp-nas)), not a local `npx skylight-mcp`. It needs no Skylight credentials on this machine. The first time, run `/mcps` in OpenCode, select `skylight`, and sign in with GitHub. It is `disabled: true` globally like every other server except `slack`, and this repo turns it on through `.opencode/mcp-on.json` — see `docs/adr/0017-*.md` and the **MCP servers** section below.
 
 claude.ai uses the same server as a custom connector. Claude Code and OpenCode get skills through `setup.sh`, but claude.ai needs each one uploaded:
 
