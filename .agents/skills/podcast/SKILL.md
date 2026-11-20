@@ -1,6 +1,8 @@
 ---
 name: podcast
-description: "Podcast: turn a document into a two-host conversational MP3 with neural TTS. Use when asked for a podcast of a Confluence page, URL, file or pasted text, or to rework an episode already made: shorten it, swap the voices, or pull one section out as its own episode."
+description: Turn a document into a two-host conversational podcast MP3 with neural TTS, then shorten it, swap the voices, or pull one section out as its own episode.
+argument-hint: "Confluence page, URL, file path, or pasted text"
+disable-model-invocation: true
 ---
 
 # Podcast
