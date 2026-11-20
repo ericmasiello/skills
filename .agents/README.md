@@ -82,6 +82,7 @@ Discipline applied automatically, not invoked by name — one behavior each.
 - **[skill-to-command](./skills/skill-to-command/SKILL.md)**: Create an opencode command wrapper that pins a specific model to an existing skill.
 - **[writing-for-agents](./skills/writing-for-agents/SKILL.md)**: Writing documents for agents — skills, `AGENTS.md`/`CLAUDE.md`, anything an agent reaches by a pointer.
 - **[diataxis](./skills/diataxis/SKILL.md)**: Classify, validate, generate, and audit documentation using the Diátaxis framework.
+- **[podcast](./skills/podcast/SKILL.md)**: Turn a document (Confluence page, URL, file, or pasted text) into an MP3 of two hosts walking it end to end, with chapters. Covers follow-ups too: shorten it, swap the voices, make one section its own episode. Synthesis uses `edge-tts` via `uv`, then `ffmpeg`. `synthesize.py` retries edge-tts's rate limits and resumes a stopped run.
 - **[proofread](./skills/proofread/SKILL.md)**: Work with hosted Proof documents and Proof SDK-compatible deployments over HTTP.
 - **[unslop](./skills/unslop/SKILL.md)**: Cut AI tells from any writing — must always apply.
 - **[pstack-typescript-best-practices](./skills/pstack-typescript-best-practices/SKILL.md)**: TypeScript best practices, used when reading or editing any `.ts`/`.tsx` file.
