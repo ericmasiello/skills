@@ -34,9 +34,11 @@ Some skills and `opencode/oh-my-openagent.json` settings shell out to external C
 |-----|---------|---------|
 | [`gh`](https://cli.github.com) | Issue tracker (`docs/agents/issue-tracker.md`), `/triage`, `/to-spec`, `/to-tickets` | `brew install gh` |
 | [`td`](https://github.com/Doist/todoist-cli) (`@doist/todoist-cli`) | `todoist-cli` skill | `brew install todoist-cli` |
-| [`twg`](https://developer.atlassian.com/cloud/twg-cli/) (Teamwork Graph CLI) | `vista-atlassian` skill (Vistaprint work-context) | `curl -fsSL --retry 2 https://teamwork-graph.atlassian.com/cli/install \| bash` then `twg setup` (interactive OAuth login — can't be scripted headlessly) |
+| [`twg`](https://developer.atlassian.com/cloud/twg-cli/) (Teamwork Graph CLI) | `vista-atlassian` skill (Vistaprint work-context), `podcast` skill (Confluence sources) | `curl -fsSL --retry 2 https://teamwork-graph.atlassian.com/cli/install \| bash` then `twg setup` (interactive OAuth login — can't be scripted headlessly) |
 | [`agent-browser`](https://agent-browser.dev) | `agent-browser` skill: all browser automation | `npm install -g agent-browser` then `agent-browser install` (downloads Chrome for Testing). Optional: `brew install ffmpeg` for `agent-browser record` |
 | [`playwright-cli`](https://github.com/microsoft/playwright-cli) (`@playwright/cli`) | Optional. Manual fallback for Firefox and WebKit checks, which `agent-browser` doesn't support. No skill uses it | `npm install -g @playwright/cli@latest` |
+| [`ffmpeg`](https://ffmpeg.org) (includes `ffprobe`) | `podcast` skill: joins segments, measures them for chapters, encodes the MP3. Also optional for `agent-browser record` | `brew install ffmpeg` |
+| [`uv`](https://docs.astral.sh/uv/) (includes `uvx`) | `podcast` skill: `uv run` installs and runs `edge-tts` for synthesis; `uvx edge-tts --list-voices` lists voices | `brew install uv` |
 | [`glab`](https://gitlab.com/gitlab-org/cli) | GitLab work — `gitlab-ci-watch`, `studio-*` skills, `address-pr-feedback`, `ericrulez-status-sync` | `brew install glab` |
 | [`stok`](https://gitlab.com/vistaprint-org/vista-engineering/engineering-productivity/ci-cd/remote-agents/stokowski-cli) (`@vp/stokowski-cli`) | `stokowski-cli` skill (Vistaprint work-context) | `npm install --global @vp/stokowski-cli --registry https://vistaprint.jfrog.io/vistaprint/api/npm/npm/` then `stok login` (Cimpress SSO — can't be scripted headlessly) |
 
