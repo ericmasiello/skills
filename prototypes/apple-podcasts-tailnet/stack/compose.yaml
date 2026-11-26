@@ -1,0 +1,28 @@
+# PROTOTYPE, throwaway. Answers "Does Apple Podcasts play a tailnet-only feed
+# from the NAS?" (ericmasiello/skills#122). Not the real podfeed-nas stack.
+name: podfeed-proto
+
+services:
+  ts:
+    image: tailscale/tailscale:v1.104.7
+    # TS_AUTHKEY and TS_HOSTNAME; written by `./proto.sh authkey`, never committed.
+    env_file: /volume1/docker/secrets/podfeed-proto/ts.env
+    environment:
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+      - TS_USERSPACE=true
+      - TS_AUTH_ONCE=true
+    volumes:
+      - ./ts-state:/var/lib/tailscale
+      - ./ts-config:/config
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.30.8-alpine
+    network_mode: service:ts
+    depends_on: [ts]
+    volumes:
+      # The folder, never single files: a renamed-over feed.xml must show up.
+      - ${PODCAST_DIR:-/volume1/podcast}:/srv/podcast:ro
+      - ./nginx:/etc/nginx/conf.d:ro
+    restart: unless-stopped

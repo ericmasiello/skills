@@ -1,0 +1,9 @@
+    <item>
+      <title>Prototype episode 2</title>
+      <description>3 minutes, added mid-test.</description>
+      <guid isPermaLink="false">podfeed-proto-ep2</guid>
+      <pubDate>__EP2_DATE__</pubDate>
+      <enclosure url="https://__HOST__/ep2.mp3" length="__EP2_BYTES__" type="audio/mpeg"/>
+      <itunes:duration>__EP2_SECONDS__</itunes:duration>
+      <itunes:episodeType>full</itunes:episodeType>
+    </item>

@@ -1,0 +1,9 @@
+    <item>
+      <title>Prototype episode 1</title>
+      <description>20 minutes. A voice says the time every 15 seconds, so seeking is easy to check.</description>
+      <guid isPermaLink="false">podfeed-proto-ep1</guid>
+      <pubDate>__EP1_DATE__</pubDate>
+      <enclosure url="https://__HOST__/ep1.mp3" length="__EP1_BYTES__" type="audio/mpeg"/>
+      <itunes:duration>__EP1_SECONDS__</itunes:duration>
+      <itunes:episodeType>full</itunes:episodeType>
+    </item>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Podfeed prototype</title>
+    <link>https://__HOST__/</link>
+    <atom:link href="https://__HOST__/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>Throwaway test feed for the podfeed prototype. Unfollow and delete me.</description>
+    <language>en-us</language>
+    <itunes:author>Eric Masiello</itunes:author>
+    <itunes:image href="https://__HOST__/cover.png"/>
+    <itunes:category text="Technology"/>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:block>Yes</itunes:block>

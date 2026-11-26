@@ -1,0 +1,4 @@
+proto.env
+out/
+stack/ts-state/
+stack/.env
