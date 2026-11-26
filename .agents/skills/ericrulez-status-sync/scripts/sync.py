@@ -326,10 +326,21 @@ def _is_mr_remote_link(target: dict[str, Any]) -> bool:
        pattern 1, just not Stokowski-specific -- any MR that only "mentions" the ticket
        (rather than getting the full GitLab-Jira dev-panel smart link) is invisible
        without this.
+    3. Any MR remote link whose URL itself parses as a GitLab MR, whatever its
+       `applicationType` or `relationship` happens to be -- confirmed live on
+       ERICRULEZ-599, -586 and -536, each of which carried a *merged* MR under
+       `applicationType: com.atlassian.bitbucket` with relationship `implements` and a
+       title reading "!27 publish domain pages...". Shapes 1 and 2 both missed it: the app
+       type isn't Stokowski's, the relationship isn't "mentioned on", and the name doesn't
+       start "Merge request - ". Branch naming varies per repo ("main", not "master"), so
+       the bare URL is the one stable signal -- matching on it also means a future Jira
+       link shape needs no further special case.
     """
     if target.get("applicationType") == STOKOWSKI_MR_APP_TYPE and target.get("relationship") == "implemented by":
         return True
     if target.get("relationship") == "mentioned on" and str(target.get("name", "")).startswith("Merge request - "):
+        return True
+    if parse_gitlab_mr_url(target.get("url", "")):
         return True
     return False
 
