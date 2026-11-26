@@ -125,6 +125,5 @@
     }
   },
   "plugins": [
-    "@openchamber/opencode-claude@1.7.0"
   ]
 }
