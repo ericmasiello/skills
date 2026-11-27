@@ -4,8 +4,11 @@ Throwaway. Never merged. It answers one question on the podfeed map: [Does Apple
 
 The smallest stack that answers it: a `tailscale/tailscale` sidecar running **Serve** (not Funnel) on 443, and `nginx:alpine` in its network namespace, serving the `podcast` share read-only. A hand-written feed with `<itunes:block>Yes</itunes:block>`, a 20-minute episode (19 MB, a voice reads the time every 15 seconds so seeking is easy to check), and a 3-minute second episode to add mid-test.
 
+**Easiest path: `./wizard.sh`**, then `./wizard.sh teardown` when you're done. It walks every step below in order. It opens the right admin pages, runs each `proto.sh` command (they print what they run), records your answers in `out/results.env`, and prints the filled-in report at the end. A step done on an earlier run is skipped unless you ask to redo it, so Ctrl-C and re-running is safe. The sections below are the same checklist by hand.
+
 | Path | What it is |
 | --- | --- |
+| `wizard.sh` | The guided version of this checklist. |
 | `stack/compose.yaml` | The two containers. nginx mounts `PODCAST_DIR` (default `/volume1/podcast`) at `:ro`. |
 | `stack/ts-config/serve.json` | Serve on 443, proxying to nginx on `127.0.0.1:8080`. No `AllowFunnel`. |
 | `stack/nginx/default.conf` | Byte ranges, `audio/mpeg` and `application/rss+xml`, no listing, 404 for dot-paths, `@eaDir`, `#recycle`. The access log records the device's tailnet IP, the Tailscale user and the user agent. |
